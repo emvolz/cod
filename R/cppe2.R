@@ -112,7 +112,7 @@ library( glue )
 
 
 #' Default arguments for tauprofile 
-TPARGS <- list( taulb = 1e-2, tauub = 1e7, res = 21, startpc = 50, endpc = 100, nobj = 100 )
+TPARGS <- list( logtaulb = -4, logtauub = 37, res = 21, startpc = 50, endpc = 100, nobj = 100 )
 
 #' Fit a COD GMRF model using weighted least squares 
 #' 
@@ -122,20 +122,20 @@ TPARGS <- list( taulb = 1e-2, tauub = 1e7, res = 21, startpc = 50, endpc = 100, 
 #' @param inverseprobabilityweights An optional vector (named or unnamed) of sample weights for each tip in the input tree
 #' @value A GPGMRF model fit 
 #' @export 
-codls <- function(tr1, tau = c(1, NULL ), profcontrol = list(), inverseprobabilityweights=NULL )
+codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobabilityweights=NULL )
 {
-	if (!inherits(tr1, 'cggephylo' ) & inherits(tr1,'phylo'))
+	if (!inherits( tr1, 'cggephylo' ) & inherits(tr1,'phylo'))
 	{
 		tr1 <- .maketreedata(tr1)
 	}
-	tau = tau[1] 
+	logtau = logtau[1] 
 	tpdf <- NULL 
-	if ( is.null( tau )){
+	if ( is.null( logtau )){
 		tpargs <- modifyList( TPARGS, profcontrol )
 		tpargs$tr = tr1 
 		tpargs$ipw = inverseprobabilityweights
 		tpdf <- do.call( tauprofile, tpargs ) 
-		tau <- tpdf$tau[ which.min( tpdf$loss ) ] 
+		logtau <- tpdf$logtau[ which.min( tpdf$loss ) ] 
 		print( tpdf )
 	}
 	st1 <- Sys.time() 
@@ -148,7 +148,7 @@ codls <- function(tr1, tau = c(1, NULL ), profcontrol = list(), inverseprobabili
 
 	y = c( ary, tr1$nodey )
 
-	arw = sqrt( tau/tr1$brlens ) # sqrt(1/.) so variance prop to brlen 
+	arw = sqrt( exp(logtau)/tr1$brlens ) # sqrt(1/.) so variance prop to brlen 
 	nodew <- .computenodew( tr1, inverseprobabilityweights )
 	w = c( arw, nodew )
 	st2b <- Sys.time() 
@@ -190,7 +190,7 @@ codls <- function(tr1, tau = c(1, NULL ), profcontrol = list(), inverseprobabili
 	st3 <- Sys.time() 
 
 	structure( list( coef = f2beta 
-		, tau = tau 
+		, logtau = logtau 
 		, data = tr1 
 		, X = X 
 		, W = W 
@@ -214,7 +214,7 @@ print.gpgmrf <- function(f)
 	print( f$data ) 
 	cat('Range of coefficients: \n')
 	print(range( coef(f)))
-	cat(glue::glue( 'Precision parameter (tau): {f$tau} \n') )
+	cat(glue::glue( 'Precision parameter (log tau): {f$logtau} \n') )
 	cat('\n')
 	invisible(f) 
 }
@@ -255,8 +255,8 @@ plot.gpgmrf <- function( f )
 #' 
 #' 
 #' @param tr A phylogenetic tree in ape::phylo format 
-#' @param taulb Lower bound of precision parameteters 
-#' @param tauub Upper bound of precision parameteters 
+#' @param logtaulb Lower bound of precision parameteters 
+#' @param logtauub Upper bound of precision parameteters 
 #' @param res Number of tau values to evaluate 
 #' @param startpc The initial per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
@@ -264,7 +264,7 @@ plot.gpgmrf <- function( f )
 #' @param ipw Optional inverse probability weights for each sample 
 #' @value A data frame containing the loss function evaluated over a range of tau values 
 #' @export 
-tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
+tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
 {
 
 	if (!inherits(tr, 'cggephylo' ) & inherits(tr,'phylo'))
@@ -272,9 +272,8 @@ tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, e
 		tr <- .maketreedata(tr)
 	}
 
-	stopifnot( taulb < tauub ) 
-	stopifnot( taulb > 0 )
-	logtaus = seq( log(taulb), log(tauub), length = res )  
+	stopifnot( logtaulb < logtauub ) 
+	logtaus = seq( (logtaulb), (logtauub), length = res )  
 
 	# cohorts in order 
 	nodeorder <- order( tr$internalnodetimes, decreasing=FALSE) 
@@ -287,20 +286,19 @@ tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, e
 		icohorts <- seq( starticohorts, endicohorts, by = floor((endicohorts-starticohorts+1)/nobj))
 	}
 
-	tau0 <- (taulb + tauub)/2
-	f = codls(tr, tau0 ) # 
+	logtau0 <- (logtaulb + logtauub)/2
+	f = codls(tr, logtau0 ) # 
 
 	nodew <- .computenodew( tr, ipw )
 
 	loss <- c() 
 	for (logtau in logtaus )
 	{
-		tau <- exp(logtau)
 		losses <- sapply( icohorts, function(i){
 			keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
 			X1 = f$X[ keepinds, ]
 
-			arw = sqrt( tau/tr$brlens ) # sqrt(1/.) so variance propto brlen
+			arw = sqrt( exp(logtau)/tr$brlens ) # sqrt(1/.) so variance propto brlen
 			# nodew <- rep( 1, length(f$logoddsindices ))  # f used here 
 			w <- c( arw, nodew )
 			W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
@@ -312,8 +310,10 @@ tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, e
 		})
 		loss <- c( loss, mean(losses))
 	}
-	#TODO optimise
-	data.frame( tau = exp(logtaus), loss = loss )
+	
+	odf <- data.frame( logtau = logtaus, loss = loss )
+	# o= optimise( ofun, lower = logtaulb , upper = logtauub , maximum = FALSE ) # optimise?
+	odf 
 }
 
 .optimcodgmrf <- function( f , ...)
@@ -331,10 +331,10 @@ tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, e
 	lbbrlen <- quantile(f$data$brlens[f$data$brlens>0], .01)
 	brlens <- pmax( f$data$brlens , lbbrlen )
 
-	ofun <- function(psi, tau = f$tau)
+	ofun <- function(psi, logtau = f$logtau)
 	{
 		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
-			, sd =  sqrt( brlens/tau ) 
+			, sd =  sqrt( brlens/exp(logtau)) 
 			, log=TRUE )
 
 		psi1 = psi[ ip ]
@@ -373,8 +373,8 @@ tauprofile <- function(tr , taulb = 1e-2, tauub = 1e3, res = 11, startpc = 75, e
 #' @param ... Additional arguments are passed to `optim`
 #' @value A GPGMRF model fit 
 #' @export 
-codml <- function(tr1, tau = c(1, NULL ), profcontrol = list(), ... )
+codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 {
-	f = codls( tr1, tau, profcontrol )
+	f = codls( tr1, logtau, profcontrol )
 	.optimcodgmrf(f, ... )
 }
