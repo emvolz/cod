@@ -378,3 +378,105 @@ codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 	f = codls( tr1, logtau, profcontrol )
 	.optimcodgmrf(f, ... )
 }
+
+
+#' Compute phylogenetic clusters by cutting tree at branches with large changes in coalescent odds 
+#' 
+#' @param f A model fit from `codls`
+#' @param clth Numeric threshold change in coalescent log odds 
+#' @param rescale if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds
+#' @value A data frame with cluster asignment for each tip 
+#' @export 
+computeclusters <- function(f, clth, rescale=TRUE)
+{
+
+	# clth <- .75 
+	# rescale <- TRUE
+	
+	clusters <- list() 
+	tr <- f$data 
+	if (rescale)
+		scpsi <- scale( f$coef ) 
+	tocut <- apply( tr$edge, MAR=1, FUN=function(uv){
+		u = uv[1] 
+		v = uv[2] 
+		(scpsi[v] - scpsi[u]) > clth 
+	}) |> which() 
+	table( tocut )
+	ntd <- lapply(  1:(Ntip(tr)+Nnode(tr)), function(x) c() )
+	clusters <- list() 
+	nadded <- rep(0, Ntip(tr) + Nnode(tr))
+	for (i in 1:Ntip(tr)) ntd[[i]] <- i 
+	for ( ie in ape::postorder(tr))
+	{
+		u <- tr$edge[ie,1]
+		v <- tr$edge[ie,2]
+		ntd[[u]] <- c( ntd[[u]], ntd[[v]] ) 
+		nadded[u] <- nadded[u]+1
+			# if ( ie %in% tocut ) browser() 
+		if ( (ie %in% tocut) & (nadded[u]==tr$ndesc[u]))  
+		{
+			clusters[[length(clusters)+1]] <-  c( ntd[[u]], ntd[[v]] )
+			ntd[[u]] <- c() 
+		} 
+	}
+	cl1 <- setdiff( 1:Ntip(tr), do.call(c,clusters))
+	clusters[[length(clusters)+1]] <-  cl1
+	clusterdf <- data.frame() 
+	for (ic in seq_along( clusters )){
+		cl <- clusters[[ic]]
+		clusterdf <- rbind( clusterdf 
+		, data.frame( tip = cl, tip.label = tr$tip.label[ cl ], clusterid = ic, psi = f$coef[cl] )
+		)
+	}
+	clusterdf$clusterid <- as.factor( clusterdf$clusterid )
+	clusterdf
+
+}
+
+#' Plots a fit from `codls` and cluster assigment from `computeclusters`
+#'
+#' @export 
+plotclusters <- function( f, clusterdf, ... )
+{
+	library( ggtree ) 
+	library( ggplot2 )
+	library( dplyr )
+	cmat <- as.matrix( clusterdf[, c('clusterid') ]); colnames(cmat) <- 'cluster'
+	rownames(cmat) <- clusterdf$tip.label 
+	gheatmap( plot(f) , cmat, ... )
+}
+
+
+#' Computes the CH index for selecting clustering thresholds
+#' 
+#' @param clusterdf Output from `computeclusters`
+#' @export 
+chindex <- function( clusterdf )
+{
+	cldfs <- split( clusterdf, clusterdf$clusterid )
+	if ( length( cldfs ) == 1 ) return(0) 
+	sapply( cldfs, function(x) mean(x$psi) ) -> clpsi 
+	sapply( cldfs, nrow ) -> cln
+	opsi <- mean( clusterdf$psi ) 
+	bcss <- sum( cln * (clpsi-opsi)^2 ) 
+	wcss <- sapply( cldfs, function(x) mean((x$psi - mean(x$psi))^2)) |> sum() 
+	n <- nrow(clusterdf ) 
+	k <- length( cldfs ) 
+	(bcss/(k-1)) / (wcss/(n-k)) 
+}
+
+#' Compute CH index over a range of clustering thresholds
+#' 
+#' @param f A fit from `codls`
+#' @param clths Numeric vector of clustering thresholds
+#' @param rescale Passed to `computeclusters`
+#' @export 
+chindices <- function(f, clths = seq( .1, 1.5, length = 20 ), rescale=TRUE)
+{
+	chs <- sapply( clths, function(clth){
+		cldf <- computeclusters( f, clth , rescale=rescale)
+		chindex(  cldf )
+	})
+	data.frame( threshold = clths, CH = chs ) 
+}
