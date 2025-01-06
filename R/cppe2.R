@@ -389,10 +389,6 @@ codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 #' @export 
 computeclusters <- function(f, clth, rescale=TRUE)
 {
-
-	# clth <- .75 
-	# rescale <- TRUE
-	
 	clusters <- list() 
 	tr <- f$data 
 	if (rescale)
@@ -407,31 +403,35 @@ computeclusters <- function(f, clth, rescale=TRUE)
 	clusters <- list() 
 	nadded <- rep(0, Ntip(tr) + Nnode(tr))
 	for (i in 1:Ntip(tr)) ntd[[i]] <- i 
+	for (i in (1+Ntip(tr)):(Ntip(tr)+Nnode(tr)) ) ntd[[i]] <- NA
 	for ( ie in ape::postorder(tr))
 	{
 		u <- tr$edge[ie,1]
 		v <- tr$edge[ie,2]
+		tryCatch( ntd[[v]], error = function(e) browser() )
 		ntd[[u]] <- c( ntd[[u]], ntd[[v]] ) 
 		nadded[u] <- nadded[u]+1
 			# if ( ie %in% tocut ) browser() 
 		if ( (ie %in% tocut) & (nadded[u]==tr$ndesc[u]))  
 		{
-			clusters[[length(clusters)+1]] <-  c( ntd[[u]], ntd[[v]] )
-			ntd[[u]] <- c() 
+			clusters[[length(clusters)+1]] <-  na.omit( c( ntd[[u]], ntd[[v]] ) )
+			ntd[[u]] <- NA 
 		} 
 	}
-	cl1 <- setdiff( 1:Ntip(tr), do.call(c,clusters))
+	cl1 <- setdiff( 1:Ntip(tr), na.omit( do.call(c,clusters)) )
 	clusters[[length(clusters)+1]] <-  cl1
 	clusterdf <- data.frame() 
 	for (ic in seq_along( clusters )){
 		cl <- clusters[[ic]]
-		clusterdf <- rbind( clusterdf 
-		, data.frame( tip = cl, tip.label = tr$tip.label[ cl ], clusterid = ic, psi = f$coef[cl] )
-		)
+		if( length( cl ) > 0 )
+		{
+			clusterdf <- rbind( clusterdf 
+			, data.frame( tip = cl, tip.label = tr$tip.label[ cl ], clusterid = ic, psi = f$coef[cl] )
+			)
+		}
 	}
 	clusterdf$clusterid <- as.factor( clusterdf$clusterid )
 	clusterdf
-
 }
 
 #' Plots a fit from `codls` and cluster assigment from `computeclusters`
