@@ -51,7 +51,7 @@ library( glue )
 		A = length(cohort) 
 		if ( A == 1 ) return(0)
 		y = rep( -(A/(2*(A-1)))*log(A-1), A)
-		y[cohort %in% dgtrs] <- (A-1)*(A/(2*(A-1)))*log(A-1)   / 2 # TODO check /2 ; TODO check extra factor (A-1)
+		y[cohort %in% dgtrs] <- (A-1)*(A/(2*(A-1)))*log(A-1)   / 2 # check /2 ; check extra factor (A-1)
 		y
 	})
 	nodey <- do.call( c, nodeys )
@@ -111,7 +111,7 @@ library( glue )
 }
 
 
-#' Default arguments for tauprofile 
+# Default arguments for tauprofile 
 TPARGS <- list( logtaulb = -4, logtauub = 37, res = 21, startpc = 50, endpc = 100, nobj = 100 )
 
 #' Fit a COD GMRF model using weighted least squares 
@@ -120,7 +120,7 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 21, startpc = 50, endpc = 10
 #' @param tau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
 #' @param inverseprobabilityweights An optional vector (named or unnamed) of sample weights for each tip in the input tree
-#' @value A GPGMRF model fit 
+#' @return A GPGMRF model fit 
 #' @export 
 codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobabilityweights=NULL )
 {
@@ -241,7 +241,7 @@ plot.gpgmrf <- function( f )
 			, high = 'red'
 			, midpoint = 0 # median( fdf$theta )
 			, limits = range(fdf$theta)
-			, name = "ψ" ) + 
+			, name = "psi" ) + 
 		ggtree::theme_tree2() +
 		ggtree::geom_tiplab()
 }
@@ -262,7 +262,7 @@ plot.gpgmrf <- function( f )
 #' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
 #' @param ipw Optional inverse probability weights for each sample 
-#' @value A data frame containing the loss function evaluated over a range of tau values 
+#' @return A data frame containing the loss function evaluated over a range of tau values 
 #' @export 
 tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
 {
@@ -347,12 +347,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 
 		-(ll1 + ll2)
 	}
-	# ofun( f$coef )
-	# , control = list(fnscale=-1)
 	o = optim( par = f$coef, fn = ofun, method = 'BFGS', ...)
-	# print( summary( o$par ))
-	# print( summary( f$coef ))
-	# plot( f$coef, o$par ); abline( a = 0, b = 1 )
 
 	f$coef <- o$par 
 	f$optim <- o 
@@ -371,7 +366,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 #' @param tau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
 #' @param ... Additional arguments are passed to `optim`
-#' @value A GPGMRF model fit 
+#' @return A GPGMRF model fit 
 #' @export 
 codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 {
@@ -385,7 +380,7 @@ codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 #' @param f A model fit from `codls`
 #' @param clth Numeric threshold change in coalescent log odds 
 #' @param rescale if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds
-#' @value A data frame with cluster asignment for each tip 
+#' @return A data frame with cluster asignment for each tip 
 #' @export 
 computeclusters <- function(f, clth, rescale=TRUE)
 {
@@ -435,16 +430,20 @@ computeclusters <- function(f, clth, rescale=TRUE)
 }
 
 #' Plots a fit from `codls` and cluster assigment from `computeclusters`
-#'
+#' 
+#' @param A `codls` fit 
+#' @param Output data frame from `computeclusters`
 #' @export 
 plotclusters <- function( f, clusterdf, ... )
 {
-	library( ggtree ) 
-	library( ggplot2 )
-	library( dplyr )
-	cmat <- as.matrix( clusterdf[, c('clusterid') ]); colnames(cmat) <- 'cluster'
+	stopifnot( 'ggtree' %in% installed.packages()[,1] )
+	stopifnot( 'ggplot2' %in% installed.packages()[,1] )
+	cl <- sort( unique( clusterdf$clusterid ))
+	cmat <- sapply( cl, function(x) (clusterdf$clusterid == x ) )
+	colnames(cmat ) <- cl 
 	rownames(cmat) <- clusterdf$tip.label 
-	gheatmap( plot(f) , cmat, ... )
+	cmat <- cmat[ f$data$tip.label, ]
+	gheatmap( plot(f), cmat, ... )
 }
 
 
@@ -479,4 +478,56 @@ chindices <- function(f, clths = seq( .1, 1.5, length = 20 ), rescale=TRUE)
 		chindex(  cldf )
 	})
 	data.frame( threshold = clths, CH = chs ) 
+}
+
+
+#' Automatically reweight sample units that may be oversampled 
+#' 
+#' Given a fit from `codls` and a set of samples which are suspected of over-sampling, this function will 
+#' re-compute `codls` over a range of reweighted samples. This will identify the sample weight at which 
+#' an association is lost between coalescent odds (psi) and the given set of samples. This is an appropriate
+#' weight to use if there is an association between coalescent odds and psi that is due to sampling effects and 
+#' not due to evolutionary effects, but note that this method may mask evolutionary effects if any are present.
+#' 
+#' @param f A `codls` fit 
+#' @param rwtips Vector of samples (type character) which are suspected of over-sampling
+#' @param wlb Numeric lower bound of sample weights to examine 
+#' @param wub Numeric upper bound of sample weights to examine 
+#' @param res Integer number of weights to examine 
+#' @param alpha The p value threshold used for selecting the optimal weight 
+#' @return A list with components `fit`: the reweigthed `codls` fit; `weights`: a new vector of sample weights; `optimalweight` the scalar weight applied to oversampled units; and `summary`: a data frame showing regression p values over a range of weights 
+#' @export 
+autoreweight <- function(f, rwtips, wlb = .01, wub = .5, res = 10, alpha = .05 ) {
+	tr <- f$data 
+	V <- rep(FALSE, Ntip(tr)) |> setNames(tr$tip.label )
+	V[ reweighttips ] <- TRUE 
+	w <- rep(1, Ntip(tr)) |> setNames( tr$tip.label)
+	ws <- seq( wlb, wub, length=res )
+	slms <- lapply( ws, function(ww) {
+	# ww <- ws[11]	
+		w[ reweighttips ] <- ww 
+		ff = codls( tr, logtau = f$logtau , inverseprobability = w)
+		slm <- lm( coef(ff)[1:Ntip(tr)] ~ V) |> summary() 
+		slm
+	} )
+	ps <- sapply( slms, function(x) 
+		x$coefficients[2,4]
+	)
+	sdf <- data.frame( sampleweight=ws, p = ps )
+	if( min(sdf$p)<alpha){
+		optweight <- max( sdf$sampleweight[ sdf$p > alpha ] )
+		w[ reweighttips ] <- optweight
+		ff <- codls( tr, logtau = f$logtau , inverseprobability = w)
+	} else{
+		optweight <- NA 
+		ff <- f 
+		w<- rep(1, Ntip(tr)) |> setNames( tr$tip.label)
+	}
+	
+	list(
+		fit = ff 
+		, weights = w 
+		, optimalweight = optweight 
+		, summary = sdf 
+	)
 }
