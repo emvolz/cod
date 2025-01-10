@@ -200,6 +200,15 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 	   , class = 'gpgmrf' )
 }
 
+
+prevo <- function(f) 
+{
+	L = sum( f$data$brlens ) 
+	# mu = coef(f) * f$data$brlens  / L
+	# sqrt(  sum( (f$data$brlens)*(coef(f)-mu)^2 ) / L  )
+	sqrt(  sum( (f$data$brlens)*coef(f)^2 ) / L  )
+}
+
 #' @export 
 print.gpgmrf <- function(f)
 {
