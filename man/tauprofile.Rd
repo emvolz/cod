@@ -2,7 +2,7 @@
 % Please edit documentation in R/cppe2.R
 \name{tauprofile}
 \alias{tauprofile}
-\title{Evaluate the loss function in the GPEGMRF model across a range of tau (precision parameter) values}
+\title{Evaluate the loss function of the cod model across a range of tau (precision parameter) values}
 \usage{
 tauprofile(
   tr,
@@ -30,11 +30,11 @@ tauprofile(
 
 \item{nobj}{The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow.}
 
-\item{ipw}{Optional inverse probability weights for each sample}
+\item{weights}{Optional inverse probability weights for each sample}
 }
 \value{
 A data frame containing the loss function evaluated over a range of tau values
 }
 \description{
-Evaluate the loss function in the GPEGMRF model across a range of tau (precision parameter) values
+Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 }

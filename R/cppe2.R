@@ -1,9 +1,3 @@
-library( ape ) 
-library( Matrix )
-library( ggtree ) 
-library( ggplot2 )
-library( glue )
-
 .maketreedata <- function(tre, brquantile=0.01)
 {
 	n <- length( tre$tip.label)
@@ -112,17 +106,17 @@ library( glue )
 
 
 # Default arguments for tauprofile 
-TPARGS <- list( logtaulb = -4, logtauub = 37, res = 21, startpc = 50, endpc = 100, nobj = 100 )
+TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 100, nobj = 100 )
 
 #' Fit a COD GMRF model using weighted least squares 
 #' 
 #' @param tr1 Phylogenetic tree in ape::phylo format 
-#' @param tau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
+#' @param logtau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
-#' @param inverseprobabilityweights An optional vector (named or unnamed) of sample weights for each tip in the input tree
+#' @param weights An optional vector (named or unnamed) of sample weights for each tip in the input tree
 #' @return A GPGMRF model fit 
 #' @export 
-codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobabilityweights=NULL )
+codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 {
 	if (!inherits( tr1, 'cggephylo' ) & inherits(tr1,'phylo'))
 	{
@@ -133,7 +127,7 @@ codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobab
 	if ( is.null( logtau )){
 		tpargs <- modifyList( TPARGS, profcontrol )
 		tpargs$tr = tr1 
-		tpargs$ipw = inverseprobabilityweights
+		tpargs$ipw = weights
 		tpdf <- do.call( tauprofile, tpargs ) 
 		logtau <- tpdf$logtau[ which.min( tpdf$loss ) ] 
 		print( tpdf )
@@ -149,7 +143,7 @@ codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobab
 	y = c( ary, tr1$nodey )
 
 	arw = sqrt( exp(logtau)/tr1$brlens ) # sqrt(1/.) so variance prop to brlen 
-	nodew <- .computenodew( tr1, inverseprobabilityweights )
+	nodew <- .computenodew( tr1, weights )
 	w = c( arw, nodew )
 	st2b <- Sys.time() 
 
@@ -183,9 +177,9 @@ codls <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), inverseprobab
 
 	X <- Matrix::sparseMatrix( i=ai, j=aj, x= ax  )
 	W <- Matrix::Diagonal( x = w )
-	QQ <- t(X) %*% W %*% X 
-	b  <- t(X) %*% W %*% y 
-	f2beta =  solve( QQ, b ) |> as.vector()
+	QQ <- Matrix::t(X) %*% W %*% X 
+	b  <- Matrix::t(X) %*% W %*% y 
+	f2beta =  Matrix::solve( QQ, b ) |> as.vector()
 
 	st3 <- Sys.time() 
 
@@ -233,10 +227,10 @@ plot.gpgmrf <- function( f )
 	f2beta = f$coef 
 	tr1 = f$data 
 	class(tr1) <- 'phylo' 
-	fdf <- data.frame( node = 1:length(tr1$nodetimes), theta = f2beta) #coef(f1)  )
-	gtr1 = ggtree::ggtree( tr1 ) %<+% fdf 
-	gtr1 + aes(color = theta) + 
-		scale_color_gradient2( low='blue'
+	fdf <- data.frame( node = 1:length(tr1$nodetimes), theta = f2beta)
+	gtr1 = ggtree::`%<+%`( ggtree::ggtree( tr1 ), fdf )
+	gtr1 + ggtree::aes(color = theta) + 
+		ggplot2::scale_color_gradient2( low='blue'
 			, mid = 'lightblue'
 			, high = 'red'
 			, midpoint = 0 # median( fdf$theta )
@@ -250,7 +244,7 @@ plot.gpgmrf <- function( f )
 
 
 
-#' Evaluate the loss function in the GPEGMRF model across a range of tau (precision parameter) values
+#' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 #' 
 #' 
 #' 
@@ -261,7 +255,7 @@ plot.gpgmrf <- function( f )
 #' @param startpc The initial per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
-#' @param ipw Optional inverse probability weights for each sample 
+#' @param weights Optional inverse probability weights for each sample 
 #' @return A data frame containing the loss function evaluated over a range of tau values 
 #' @export 
 tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
@@ -303,15 +297,17 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 			w <- c( arw, nodew )
 			W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
 			y1 = f$y[ keepinds ] # f used here 
-			QQ1 <- t(X1) %*% W1 %*% X1 
-			b1 <- t(X1) %*% W1 %*% y1 
-			beta1 =  solve( QQ1, b1 ) |> as.vector()
+			QQ1 <- Matrix::t(X1) %*% W1 %*% X1 
+			b1 <- Matrix::t(X1) %*% W1 %*% y1 
+			beta1 =  Matrix::solve( QQ1, b1 ) |> as.vector()
 			sum( (f$y[f$coindices[[nodeorder[i+1]]]] - f$X[f$coindices[[nodeorder[i+1]]],] %*% beta1)^2 )
 		})
 		loss <- c( loss, mean(losses))
 	}
 	
 	odf <- data.frame( logtau = logtaus, loss = loss )
+	odf$optimal <- ''
+	odf$optimal[ which.min( odf$loss ) ] <- '***' 
 	# o= optimise( ofun, lower = logtaulb , upper = logtauub , maximum = FALSE ) # optimise?
 	odf 
 }
@@ -394,11 +390,11 @@ computeclusters <- function(f, clth, rescale=TRUE)
 		(scpsi[v] - scpsi[u]) > clth 
 	}) |> which() 
 	table( tocut )
-	ntd <- lapply(  1:(Ntip(tr)+Nnode(tr)), function(x) c() )
+	ntd <- lapply(  1:(ape::Ntip(tr)+ape::Nnode(tr)), function(x) c() )
 	clusters <- list() 
-	nadded <- rep(0, Ntip(tr) + Nnode(tr))
-	for (i in 1:Ntip(tr)) ntd[[i]] <- i 
-	for (i in (1+Ntip(tr)):(Ntip(tr)+Nnode(tr)) ) ntd[[i]] <- NA
+	nadded <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
+	for (i in 1:ape::Ntip(tr)) ntd[[i]] <- i 
+	for (i in (1+ape::Ntip(tr)):(ape::Ntip(tr)+ape::Nnode(tr)) ) ntd[[i]] <- NA
 	for ( ie in ape::postorder(tr))
 	{
 		u <- tr$edge[ie,1]
@@ -413,7 +409,7 @@ computeclusters <- function(f, clth, rescale=TRUE)
 			ntd[[u]] <- NA 
 		} 
 	}
-	cl1 <- setdiff( 1:Ntip(tr), na.omit( do.call(c,clusters)) )
+	cl1 <- setdiff( 1:ape::Ntip(tr), na.omit( do.call(c,clusters)) )
 	clusters[[length(clusters)+1]] <-  cl1
 	clusterdf <- data.frame() 
 	for (ic in seq_along( clusters )){
@@ -437,13 +433,12 @@ computeclusters <- function(f, clth, rescale=TRUE)
 plotclusters <- function( f, clusterdf, ... )
 {
 	stopifnot( 'ggtree' %in% installed.packages()[,1] )
-	stopifnot( 'ggplot2' %in% installed.packages()[,1] )
 	cl <- sort( unique( clusterdf$clusterid ))
 	cmat <- sapply( cl, function(x) (clusterdf$clusterid == x ) )
 	colnames(cmat ) <- cl 
 	rownames(cmat) <- clusterdf$tip.label 
 	cmat <- cmat[ f$data$tip.label, ]
-	gheatmap( plot(f), cmat, ... )
+	ggtree::gheatmap( plot(f), cmat, ... )
 }
 
 
@@ -477,7 +472,9 @@ chindices <- function(f, clths = seq( .1, 1.5, length = 20 ), rescale=TRUE)
 		cldf <- computeclusters( f, clth , rescale=rescale)
 		chindex(  cldf )
 	})
-	data.frame( threshold = clths, CH = chs ) 
+	chdf <- data.frame( threshold = clths, CH = chs, optimal='' ) 
+	chdf$optimal[ which.max(chdf$CH) ] <- '***'
+	chdf
 }
 
 
@@ -499,29 +496,28 @@ chindices <- function(f, clths = seq( .1, 1.5, length = 20 ), rescale=TRUE)
 #' @export 
 autoreweight <- function(f, rwtips, wlb = .01, wub = .5, res = 10, alpha = .05 ) {
 	tr <- f$data 
-	V <- rep(FALSE, Ntip(tr)) |> setNames(tr$tip.label )
+	V <- rep(FALSE, ape::Ntip(tr)) |> setNames(tr$tip.label )
 	V[ reweighttips ] <- TRUE 
-	w <- rep(1, Ntip(tr)) |> setNames( tr$tip.label)
+	w <- rep(1, ape::Ntip(tr)) |> setNames( tr$tip.label)
 	ws <- seq( wlb, wub, length=res )
 	slms <- lapply( ws, function(ww) {
-	# ww <- ws[11]	
 		w[ reweighttips ] <- ww 
-		ff = codls( tr, logtau = f$logtau , inverseprobability = w)
-		slm <- lm( coef(ff)[1:Ntip(tr)] ~ V) |> summary() 
+		ff = codls( tr, logtau = f$logtau , weights = w)
+		slm <- lm( coef(ff)[1:ape::Ntip(tr)] ~ V) |> summary() 
 		slm
 	} )
 	ps <- sapply( slms, function(x) 
 		x$coefficients[2,4]
 	)
 	sdf <- data.frame( sampleweight=ws, p = ps )
-	if( min(sdf$p)<alpha){
+	if( max(sdf$p)>alpha ){
 		optweight <- max( sdf$sampleweight[ sdf$p > alpha ] )
 		w[ reweighttips ] <- optweight
-		ff <- codls( tr, logtau = f$logtau , inverseprobability = w)
+		ff <- codls( tr, logtau = f$logtau , weights = w)
 	} else{
 		optweight <- NA 
 		ff <- f 
-		w<- rep(1, Ntip(tr)) |> setNames( tr$tip.label)
+		w<- rep(1, ape::Ntip(tr)) |> setNames( tr$tip.label)
 	}
 	
 	list(

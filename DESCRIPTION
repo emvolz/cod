@@ -10,7 +10,7 @@ Description: Provides models for inferring variation in coalescent rates across
     biased sampling, computing phylogenetic clusters, optimising cluster 
     thresholds.
 Depends: Matrix (>= 1.7), ape (>= 5.0), glue (>= 1.0.0)
-Suggests: ggtree (>= 3.12.0), ggplot2 (>= 3.0.0)
+Suggests: ggtree (>= 3.12.0), ggplot2 (>= 3.0.0), knitr, rmarkdown
+VignetteBuilder: knitr
 License: MIT
 RoxygenNote: 7.3.1
-

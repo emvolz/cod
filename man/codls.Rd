@@ -4,21 +4,16 @@
 \alias{codls}
 \title{Fit a COD GMRF model using weighted least squares}
 \usage{
-codls(
-  tr1,
-  logtau = c(0, NULL),
-  profcontrol = list(),
-  inverseprobabilityweights = NULL
-)
+codls(tr1, logtau = NULL, profcontrol = list(), weights = NULL)
 }
 \arguments{
 \item{tr1}{Phylogenetic tree in ape::phylo format}
 
+\item{logtau}{Precision parameter. If NULL, will invoke `tauprofile` to find best value.}
+
 \item{profcontrol}{Optional list of arguments passed to `tauprofile`}
 
-\item{inverseprobabilityweights}{An optional vector (named or unnamed) of sample weights for each tip in the input tree}
-
-\item{tau}{Precision parameter. If NULL, will invoke `tauprofile` to find best value.}
+\item{weights}{An optional vector (named or unnamed) of sample weights for each tip in the input tree}
 }
 \value{
 A GPGMRF model fit
