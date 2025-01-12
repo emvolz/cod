@@ -115,6 +115,30 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
 #' @param weights An optional vector (named or unnamed) of sample weights for each tip in the input tree
 #' @return A GPGMRF model fit 
+#' 
+#' @examples 
+#' # A simple example that does not have population structure 
+#' set.seed( 1111 )
+#' tr <- ape::rtree( 100 )
+#' f <- codls(tr)
+#' coef(f) |> head() 
+#' summary(f)
+#' \dontrun{
+#' plot(f)
+#' }
+#' 
+#' # This example has population structure 
+#' tr0 = rcoal(20); tr0$edge.length <- .01*tr0$edge.length 
+#' tr1 = rcoal(80); 
+#' dx <- (max(node.depth.edgelength( tr1 ))-max(node.depth.edgelength( tr0 )))
+#' tr0$root.edge <- dx
+#' tr <- bind.tree(tr0,tr1, position = dx)
+#' f <- codls(tr)
+#' summary(f) 
+#' \dontrun{
+#' plot(f)
+#' }
+#' 
 #' @export 
 codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 {
@@ -200,13 +224,48 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 	   , class = 'gpgmrf' )
 }
 
-
-prevo <- function(f) 
+#' Root mean square coalescent log odds 
+#'
+#' This is a summary statistic that describes the amount of variation in coalescent rates across lineages in a phylogenetic tree  
+#' It is defined as \deqn{ \sqrt{ \sum_i l_i \psi_i^2 / L }  }
+#' where the sum is over all branches i in the tree and weighted by branch length \eqn{l_i} and where  \eqn{ L = \sum_i l_i  }
+#'
+#' @param f Fit from `codls`
+#' @return Numeric RMSCLO 
+#' @export 
+rmsclo = phylopredictance <- function(f) 
 {
 	L = sum( f$data$brlens ) 
-	# mu = coef(f) * f$data$brlens  / L
-	# sqrt(  sum( (f$data$brlens)*(coef(f)-mu)^2 ) / L  )
-	sqrt(  sum( (f$data$brlens)*coef(f)^2 ) / L  )
+	l = f$data$brlens[match(1:length(coef(f)), f$data$edge[,2])]
+	l[ is.na(l)] <- 0
+	L = sum(l)
+	sqrt(  sum( l*(coef(f)-mean(coef(f)))^2 ) / L  )
+}
+
+#' Effective number of extant lineages 
+#' 
+#' @param f Fit from `codls` 
+#' @return Numeric effective number extant lineages 
+#' @export 
+neffextant <- function(f) 
+{
+	p <- 1 / (1 + exp(-coef(f)[1:ape::Ntip(f$data)]))
+	p <- p / sum(p) 
+	1 / sum(p^2)
+}
+
+#' @export 
+summary.gpgmrf <- function(f)
+{
+	print(f)
+	cat('\n' )
+	odf <- data.frame( logprecision = f$logtau
+		 , RMSCLO = rmsclo(f) 
+		 , Neff = neffextant(f) 
+		)
+	print( odf )
+	cat('\n' )
+	invisible(odf)
 }
 
 #' @export 
@@ -216,7 +275,8 @@ print.gpgmrf <- function(f)
 	cat(' Genealogical placement GMRF model fit \n')
 	print( f$data ) 
 	cat('Range of coefficients: \n')
-	print(range( coef(f)))
+	cat( glue::glue('{range(coef(f))}') )
+	cat( '\n' )
 	cat(glue::glue( 'Precision parameter (log tau): {f$logtau} \n') )
 	cat('\n')
 	invisible(f) 
@@ -320,6 +380,9 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 	# o= optimise( ofun, lower = logtaulb , upper = logtauub , maximum = FALSE ) # optimise?
 	odf 
 }
+
+
+
 
 .optimcodgmrf <- function( f , ...)
 {

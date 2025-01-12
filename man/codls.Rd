@@ -21,3 +21,27 @@ A GPGMRF model fit
 \description{
 Fit a COD GMRF model using weighted least squares
 }
+\examples{
+# A simple example that does not have population structure 
+set.seed( 1111 )
+tr <- ape::rtree( 100 )
+f <- codls(tr)
+coef(f) |> head() 
+summary(f)
+\dontrun{
+plot(f)
+}
+
+# This example has population structure 
+tr0 = rcoal(20); tr0$edge.length <- .01*tr0$edge.length 
+tr1 = rcoal(80); 
+dx <- (max(node.depth.edgelength( tr1 ))-max(node.depth.edgelength( tr0 )))
+tr0$root.edge <- dx
+tr <- bind.tree(tr0,tr1, position = dx)
+f <- codls(tr)
+summary(f) 
+\dontrun{
+plot(f)
+}
+
+}
