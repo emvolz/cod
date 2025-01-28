@@ -43,34 +43,37 @@
 		cohort= coalescentcohorts[[j]]
 		dgtrs = daughters[[ j+n  ]]
 		A = length(cohort) 
-		if ( A == 1 ) return(0)
-		y = rep( -(A/(2*(A-1)))*log(A-1), A)
-		y[cohort %in% dgtrs] <- (A-1)*(A/(2*(A-1)))*log(A-1)   / 2 # check /2 ; check extra factor (A-1)
+
+		if ( A < 3 ) return( rep(0, A ) )
+		y <- rep( -(2/A^1)*(log(2)+log(A-2)), A )
+		y[ cohort %in% dgtrs ] <-  ((A-2)/A^1)*(log(2) + log(A-2) )
+
 		y
 	})
 	nodey <- do.call( c, nodeys )
+	nodey <- nodey / sd( nodey ) # standardise 
 	
-	# adjusted breanch lengths 
-	brlens <- (nodetimes[whno]-nodetimes[parent[whno]])
-	lbbrlen <- quantile( brlens[ brlens > 0 ], brquantile )
-	brlens[ brlens <= 0 ] <- lbbrlen 
+	# adjusted branch lengths  TODO does not include root...
+	whnobrlens <- (nodetimes[whno]-nodetimes[parent[whno]])
+	lbbrlen <- quantile( whnobrlens[ whnobrlens > 0 ], brquantile )
+	whnobrlens[ whnobrlens <= 0 ] <- lbbrlen 
 
 	rv = modifyList( tre 
 		, list( n = ape::Ntip(tre), nedge = ape::Nedge( tre ), nnode = ape::Nnode( tre )
-	 	 , daughters = daughters
-	 	 , parent = parent
-	 	 , nodetimes = nodetimes 
-	 	 , nodeheights = nodeheights
-	 	 , internalnodeheights = inhs 
-	 	 , internalnodetimes = nodetimes[ (n+1):(n + nnode) ]
-	 	 , parentnodeheights = pnhs
-	 	 , ndesc = ndesc 
-	 	 , coalescentcohorts = coalescentcohorts
-	 	 , nr = nr 
-	 	 , whno = whno 
-	 	 , nodey = nodey 
-	 	 , brlens = brlens 
-	 	)
+		 , daughters = daughters
+		 , parent = parent
+		 , nodetimes = nodetimes 
+		 , nodeheights = nodeheights
+		 , internalnodeheights = inhs 
+		 , internalnodetimes = nodetimes[ (n+1):(n + nnode) ]
+		 , parentnodeheights = pnhs
+		 , ndesc = ndesc 
+		 , coalescentcohorts = coalescentcohorts
+		 , nr = nr 
+		 , whno = whno 
+		 , nodey = nodey 
+		 , whnobrlens = whnobrlens 
+		)
 	)
 	class(rv) <- c('phylo', 'cppephylo' ) 
 	
@@ -161,12 +164,11 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 	whno = tr1$whno 
 	nr = tr1$nr 
 
-	i <- which( !is.na( tr1$parent ) )
 	ary = rep(0, nr)
 
 	y = c( ary, tr1$nodey )
 
-	arw = sqrt( exp(logtau)/tr1$brlens ) # sqrt(1/.) so variance prop to brlen 
+	arw = sqrt( exp(logtau)/tr1$whnobrlens ) # sqrt(1/.) so variance prop to brlen 
 	nodew <- .computenodew( tr1, weights )
 	w = c( arw, nodew )
 	st2b <- Sys.time() 
@@ -181,6 +183,7 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 	ax = c( ax, rep(-1, nr) )
 
 	# coindices is used by later functions, but is slow, maybe move this computation...
+	# coindices:= row indices in X corresponding to each coalescent cohort
 	k <- nr + 1 
 	coindices <- list() 
 	coii <- 1 
@@ -212,6 +215,8 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 		, data = tr1 
 		, X = X 
 		, W = W 
+		, b = b 
+		, Q = QQ 
 		, y = y 
 		, nr = nr 
 		, arindices = 1:nr
@@ -235,8 +240,10 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 #' @export 
 rmsclo = phylopredictance <- function(f) 
 {
-	L = sum( f$data$brlens ) 
-	l = f$data$brlens[match(1:length(coef(f)), f$data$edge[,2])]
+	stop('not implemented' )
+	# TODO whnobrlen not aligned with coef 
+	L = sum( f$data$whnobrlens ) 
+	l = f$data$whnobrlens[match(1:length(coef(f)), f$data$edge[,2])]
 	l[ is.na(l)] <- 0
 	L = sum(l)
 	sqrt(  sum( l*(coef(f)-mean(coef(f)))^2 ) / L  )
@@ -361,7 +368,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 			keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
 			X1 = f$X[ keepinds, ]
 
-			arw = sqrt( exp(logtau)/tr$brlens ) # sqrt(1/.) so variance propto brlen
+			arw = sqrt( exp(logtau)/tr$whnobrlens ) # sqrt(1/.) so variance propto brlen
 			# nodew <- rep( 1, length(f$logoddsindices ))  # f used here 
 			w <- c( arw, nodew )
 			W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
@@ -382,7 +389,53 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 }
 
 
+.optimcodgmrf2 <- function( f, logtau , ...)
+{
 
+	# nodetopis <- sapply( 1:ape::Nnode(f$data), function(j){
+	# 	co = f$data$coalescentcohorts[[j]]
+	# 	A = length(co) 
+	# 	if ( A < 3 ) return(0)
+	# 	log(2) - log(A-2)
+	# 	
+	# })
+	nodetodgtrs <- sapply(1:ape::Nnode(f$data), function(j){
+		f$data$daughters[[ j+f$data$n  ]]
+	})
+
+	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
+	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
+
+	ofun <- function(psi)
+	{
+		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
+			, sd =  sqrt( whnobrlens/exp(logtau)) 
+			, log=TRUE )
+		# incorporate other psis to get intercept 
+		# nodetopis <- sapply( 1:ape::Nnode(f$data), function(j){
+		# 	co = f$data$coalescentcohorts[[j]]
+		# 	sum( psi[co] )
+		# })
+		ups <- lapply( 1:ape::Nnode(f$data), function(j){
+			co = f$data$coalescentcohorts[[j]]
+			psi2 <- pmax(-50,pmin(10,psi[co]))
+			1 / ( 1 + exp(-psi2))
+		})
+		sups <- sapply( ups, sum )
+
+		psii <- pmax(-50, pmin(10, psi[ nodetodgtrs[1,]]))
+		psij <- pmax(-50, pmin(10, psi[ nodetodgtrs[2,]]))
+		pi <- 1 / (1 + exp(-psii) ) / sups 
+		pj <- 1 / (1 + exp(-psij) ) / sups 
+		-( sum(log(pi)+log(pj)) + sum( arterms ) )
+	}
+	o = optim( par = f$coef, fn = ofun, method = 'BFGS', ...)
+
+	f$logtau <- logtau 
+	f$coef <- o$par 
+	f$optim <- o 
+	f
+}
 
 .optimcodgmrf <- function( f , ...)
 {
@@ -395,23 +448,29 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 		a <- length( co ) 
 		A[ co-f$istart+1 ] <- a
 	}
-	psiintercept <- -log(A-1)
-	lbbrlen <- quantile(f$data$brlens[f$data$brlens>0], .01)
-	brlens <- pmax( f$data$brlens , lbbrlen )
+	# psiintercept <- -log(A-1)
+	psiintercept <- log(2) - log(A-2)
+	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
+	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
 
 	ofun <- function(psi, logtau = f$logtau)
 	{
 		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
-			, sd =  sqrt( brlens/exp(logtau)) 
+			, sd =  sqrt( whnobrlens/exp(logtau)) 
 			, log=TRUE )
 
 		psi1 = psi[ ip ]
-		pp <- 1 / (1 + exp(-(psi1 + psiintercept)))
+		psi2 <- psi1 + psiintercept
+		psi2 <- pmax(-50, pmin(10, psi2 ))
+		pp <- 1 / (1 + exp(-(psi2)))
 		coodterms <-  coy*log(pp) + (1-coy)*log(1-pp)  
+		# ?implement the complete likelihood pij = pi*pj*(2-pi-pj)/((1-pi)(1-pj))
+		# above is approx correct if pi & pj << 1
 
 		ll1 = sum( arterms ) 
 		ll2 = sum( coodterms )
-		# print(c( ll1, ll2) )
+		# print(c( ll2, ll1) )
+# browser()
 
 		-(ll1 + ll2)
 	}
@@ -439,7 +498,19 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 {
 	f = codls( tr1, logtau, profcontrol )
-	.optimcodgmrf(f, ... )
+	# .optimcodgmrf(f, ... )
+	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
+	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
+	rar <- as.vector( f$X[f$arindices,] %*% coef(f) )
+	oftau <- function( logtau )
+	{
+		arterms <- dnorm( rar, 0
+				, sd =  sqrt( whnobrlens/exp(logtau)) 
+				, log=TRUE )
+		- sum( arterms )
+	}
+	otau <- optimise( oftau, lower=-5, upper = 37 )$minimum
+	.optimcodgmrf2(f,  otau, ... )
 }
 
 
