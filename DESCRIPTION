@@ -1,15 +1,15 @@
 Package: cod
 Type: Package
 Title: Inference of Coalescent ODds in Phylogenetic Trees
-Version: 0.1.1
-Date: 2024-12-12
+Version: 0.2.1
+Date: 2025-01-28
 Author: Erik Volz
 Maintainer: Erik Volz <e.volz@imperial.ac.uk>
 Description: Provides models for inferring variation in coalescent rates across 
     branches in a phylogenetic tree, identifying growing lineages, adjusting for 
     biased sampling, computing phylogenetic clusters, optimising cluster 
     thresholds, & summarising variation in rates.
-Depends: Matrix (>= 1.7), ape (>= 5.0), glue (>= 1.0.0)
+Depends: Matrix (>= 1.7), ape (>= 5.0), glue (>= 1.0.0), mgcv (>= 1.9-1)
 Suggests: ggtree (>= 3.12.0), ggplot2 (>= 3.0.0), knitr, rmarkdown
 VignetteBuilder: knitr
 License: MIT

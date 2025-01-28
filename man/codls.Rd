@@ -16,7 +16,7 @@ codls(tr1, logtau = NULL, profcontrol = list(), weights = NULL)
 \item{weights}{An optional vector (named or unnamed) of sample weights for each tip in the input tree}
 }
 \value{
-A GPGMRF model fit
+A COD GMRF model fit
 }
 \description{
 Fit a COD GMRF model using weighted least squares

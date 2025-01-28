@@ -117,7 +117,7 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' @param logtau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
 #' @param weights An optional vector (named or unnamed) of sample weights for each tip in the input tree
-#' @return A GPGMRF model fit 
+#' @return A COD GMRF model fit 
 #' 
 #' @examples 
 #' # A simple example that does not have population structure 
@@ -436,34 +436,87 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 
 #' Fit a genealogical placement GMRF model using maximum likelihood 
 #' 
-#' This method optimises the sequential-bernoulli likelihood of a COD GMRF model using gradient descent and using `codls` to find initial conditions. 
+#' Fits the COD GMRF model using the `mgcv::gam` method. Additional arguments can be passed to `gam`; see documentation for that method. Using method="REML" can speed execution by using a constrained maximum likelihood approach. Additionally, an approximate reduced-rank MRF model can be fitted by supplying the `k` parameter. 
 #' If tau is not provided, `codls` is also used to optimise this parameter. 
 #' This method is slower than `codls` and is not recommended for trees with more than several hundred samples. 
 #' 
-#' The ML COD GMRF model does not support inverse probability weighting of samples. Use `codls` if sample weighting is needed.
+#' The ML COD GMRF method does not currently support inverse probability weighting of samples. Use `codls` if sample weighting is needed.
 #' 
 #' @param tr1 Phylogenetic tree in ape::phylo format 
-#' @param tau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
+#' @param logtau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
+#' @param k Fits a reduced-rank MRF model if k is an integer < number of nodes in the input tree. This can speed calculation but reduces precision. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
-#' @param ... Additional arguments are passed to `optim`
-#' @return A GPGMRF model fit 
+#' @param ... Additional arguments are passed to `mgcv::gam`
+#' @return A COD GMRF model fit. Includes the GAM model fit.
 #' @export 
-codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
+codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 {
 	f = codls( tr1, logtau, profcontrol )
-	# .optimcodgmrf(f, ... )
-	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
-	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
-	rar <- as.vector( f$X[f$arindices,] %*% coef(f) )
-	oftau <- function( logtau )
-	{
-		arterms <- dnorm( rar, 0
-				, sd =  sqrt( whnobrlens/exp(logtau)) 
-				, log=TRUE )
-		- sum( arterms )
+	logtau <- f$logtau 
+
+	# dependent variable 
+	coy = ifelse( f$y[ f$logoddsindices] > 0 , 1 , 0 )
+
+	# pseudo-intercept 
+	ip = apply( f$X[ f$logoddsindices, ], MAR=1, FUN=function(x)which(x==1)[1] )
+	A <- rep(1, length(coy))
+	for (co in f$coindices){
+		a <- length( co ) 
+		A[ co-f$istart+1 ] <- a
 	}
-	otau <- optimise( oftau, lower=-5, upper = 37 )$minimum
-	.optimcodgmrf(f,  ... )
+	# psiintercept <- -log(A-1)
+	psiintercept <- log(2) - log(pmax(3,A)-2)
+
+	# add root observation 
+	iroot <- which( is.na( f$data$parent ) )
+	coy <- c( coy, 0 )
+	ip <- c( ip, iroot )
+	psiintercept <- c( psiintercept, 0  )
+
+	# independent variable 
+	lineage <- as.factor( ip )
+	np <- length( coef(f))
+	
+	# covariance matrix 
+	pnames <- paste0( 1:np )
+	pmat <- matrix(0, nrow=np, ncol=np ) 
+	rownames(pmat) = colnames(pmat) <- pnames 
+	## encode tree topology 
+	nbrs <- lapply( 1:np, function(i){
+		if (i <= f$data$n ){
+			return( f$data$parent[i] )
+		} else if ( is.na( f$data$parent[i] )) # root 
+		{
+			return( f$data$daughters[[i]] )
+		} else # internal node, not root 
+		{
+			return( c( f$data$parent[i], f$data$daughters[[i]] ))
+		}
+	})
+	names(nbrs) <- pnames
+	brlens <- f$data$nodetimes - f$data$nodetimes[ f$data$parent ]
+	for (i in 1:np){
+		a <- f$data$parent[i] 
+		if (!is.na( a )) {
+			pmat[i,a] <- -1/brlens[i]
+			pmat[a,i] <- -1/brlens[i]
+		}
+	}
+	K <- min( max(k,5), length( coef(f)))
+	pmat <-  exp(logtau)*pmat 
+	rspmat <- rowSums( pmat  ) 
+	diag(pmat ) <- -rspmat 
+	st0 <- Sys.time() 
+	h = mgcv::gam( coy ~ s(lineage, bs = 'mrf',k = K, xt=list(penalty=pmat, nb=nbrs)) + psiintercept, family = binomial(link='logit'), ... )
+	st1 <- Sys.time() 
+	runtime = st1 - st0
+
+	hcoef <- (predict(h, newdata = data.frame( lineage =pnames,  psiintercept = 0 ) )-coef(h)[1]) 
+	f$coef <- hcoef
+	f$runtime <- runtime 
+	f$fit = h 
+
+	f 
 }
 
 

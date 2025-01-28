@@ -4,25 +4,27 @@
 \alias{codml}
 \title{Fit a genealogical placement GMRF model using maximum likelihood}
 \usage{
-codml(tr1, logtau = c(0, NULL), profcontrol = list(), ...)
+codml(tr1, logtau = c(0, NULL), k = Inf, profcontrol = list(), ...)
 }
 \arguments{
 \item{tr1}{Phylogenetic tree in ape::phylo format}
 
+\item{logtau}{Precision parameter. If NULL, will invoke `tauprofile` to find best value.}
+
+\item{k}{Fits a reduced-rank MRF model if k is an integer < number of nodes in the input tree. This can speed calculation but reduces precision.}
+
 \item{profcontrol}{Optional list of arguments passed to `tauprofile`}
 
-\item{...}{Additional arguments are passed to `optim`}
-
-\item{tau}{Precision parameter. If NULL, will invoke `tauprofile` to find best value.}
+\item{...}{Additional arguments are passed to `mgcv::gam`}
 }
 \value{
-A GPGMRF model fit
+A COD GMRF model fit. Includes the GAM model fit.
 }
 \description{
-This method optimises the sequential-bernoulli likelihood of a COD GMRF model using gradient descent and using `codls` to find initial conditions. 
+Fits the COD GMRF model using the `mgcv::gam` method. Additional arguments can be passed to `gam`; see documentation for that method. Using method="REML" can speed execution by using a constrained maximum likelihood approach. Additionally, an approximate reduced-rank MRF model can be fitted by supplying the `k` parameter. 
 If tau is not provided, `codls` is also used to optimise this parameter. 
 This method is slower than `codls` and is not recommended for trees with more than several hundred samples.
 }
 \details{
-The ML COD GMRF model does not support inverse probability weighting of samples. Use `codls` if sample weighting is needed.
+The ML COD GMRF method does not currently support inverse probability weighting of samples. Use `codls` if sample weighting is needed.
 }
