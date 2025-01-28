@@ -389,53 +389,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 }
 
 
-.optimcodgmrf2 <- function( f, logtau , ...)
-{
 
-	# nodetopis <- sapply( 1:ape::Nnode(f$data), function(j){
-	# 	co = f$data$coalescentcohorts[[j]]
-	# 	A = length(co) 
-	# 	if ( A < 3 ) return(0)
-	# 	log(2) - log(A-2)
-	# 	
-	# })
-	nodetodgtrs <- sapply(1:ape::Nnode(f$data), function(j){
-		f$data$daughters[[ j+f$data$n  ]]
-	})
-
-	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
-	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
-
-	ofun <- function(psi)
-	{
-		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
-			, sd =  sqrt( whnobrlens/exp(logtau)) 
-			, log=TRUE )
-		# incorporate other psis to get intercept 
-		# nodetopis <- sapply( 1:ape::Nnode(f$data), function(j){
-		# 	co = f$data$coalescentcohorts[[j]]
-		# 	sum( psi[co] )
-		# })
-		ups <- lapply( 1:ape::Nnode(f$data), function(j){
-			co = f$data$coalescentcohorts[[j]]
-			psi2 <- pmax(-50,pmin(10,psi[co]))
-			1 / ( 1 + exp(-psi2))
-		})
-		sups <- sapply( ups, sum )
-
-		psii <- pmax(-50, pmin(10, psi[ nodetodgtrs[1,]]))
-		psij <- pmax(-50, pmin(10, psi[ nodetodgtrs[2,]]))
-		pi <- 1 / (1 + exp(-psii) ) / sups 
-		pj <- 1 / (1 + exp(-psij) ) / sups 
-		-( sum(log(pi)+log(pj)) + sum( arterms ) )
-	}
-	o = optim( par = f$coef, fn = ofun, method = 'BFGS', ...)
-
-	f$logtau <- logtau 
-	f$coef <- o$par 
-	f$optim <- o 
-	f
-}
 
 .optimcodgmrf <- function( f , ...)
 {
@@ -470,7 +424,6 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 		ll1 = sum( arterms ) 
 		ll2 = sum( coodterms )
 		# print(c( ll2, ll1) )
-# browser()
 
 		-(ll1 + ll2)
 	}
@@ -510,7 +463,7 @@ codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
 		- sum( arterms )
 	}
 	otau <- optimise( oftau, lower=-5, upper = 37 )$minimum
-	.optimcodgmrf2(f,  otau, ... )
+	.optimcodgmrf(f,  ... )
 }
 
 
