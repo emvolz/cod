@@ -145,7 +145,7 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' @export 
 codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 {
-	if (!inherits( tr1, 'cggephylo' ) & inherits(tr1,'phylo'))
+	if (!inherits( tr1, 'cppephylo' ) & inherits(tr1,'phylo'))
 	{
 		tr1 <- .maketreedata(tr1)
 	}
@@ -240,10 +240,8 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 #' @export 
 rmsclo = phylopredictance <- function(f) 
 {
-	stop('not implemented' )
-	# TODO whnobrlen not aligned with coef 
 	L = sum( f$data$whnobrlens ) 
-	l = f$data$whnobrlens[match(1:length(coef(f)), f$data$edge[,2])]
+	l = f$data$edge.length[match(1:length(coef(f)), f$data$edge[,2])]
 	l[ is.na(l)] <- 0
 	L = sum(l)
 	sqrt(  sum( l*(coef(f)-mean(coef(f)))^2 ) / L  )
@@ -318,6 +316,79 @@ plot.gpgmrf <- function( f )
 
 
 
+# Get indices corresponding to rows of treedata (all extant) corresponding to time of specific nodes in order of time
+.getnodecohorts <- function(tr, startpc, endpc, nobj)
+{
+	stopifnot(inherits(tr, 'cppephylo' ))
+	# cohorts in order 
+	nodeorder <- order( tr$internalnodetimes, decreasing=FALSE) 
+	# indices for forecasting 
+	starticohorts = floor( startpc*.01*length(nodeorder) )
+	endicohorts = floor( endpc*.01*length(nodeorder) )-1
+	icohorts <- starticohorts:endicohorts
+	if ( nobj < length( icohorts )){
+		icohorts <- seq( starticohorts, endicohorts, by = floor((endicohorts-starticohorts+1)/nobj))
+	}
+	list( icohorts = icohorts, nodeorder = nodeorder, nodetimes = sort( tr$internalnodetimes, decreasing=FALSE) )
+}
+
+# devianceexplained <- function( cohorts, nodeorder, nodetimes )
+# {
+# }
+
+.timeslicetree <- function( tr1, ntthreshold )
+{
+	stopifnot(inherits(tr1, 'cppephylo' ))
+	# gnc <- .getnodecohorts(f$data, 50, 100 , 10)
+	# tr1 <- f$data 
+	# ## example threshold time 
+	# ntthreshold <- gnc$nodetimes[ gnc$icohorts[5] ]
+
+	# which node gets next coalescent event after ntthreshold 
+	yntimes <- tr1$nodetimes; 
+	yntimes[ yntimes < ntthreshold ] <- Inf 
+	yntimes[ 1:ape::Ntip(tr1)] <- Inf 
+	y1node <- which.min( yntimes )
+
+	edgetodrop <- which( (tr1$nodetimes[ tr1$edge[,1] ] > ntthreshold) )
+	edge <- tr1$edge[ -edgetodrop , ]
+	edge.length <- tr1$edge.length[ -edgetodrop] 
+	N <- length( unique( as.vector(edge) )) 
+	Nnode <- length(unique( edge[,1] ))
+	Ntip <- N - Nnode 
+	tips <- setdiff( edge[,2] , edge[,1] )
+	tiporder <- order(tr1$nodetimes[ tips ] )
+	internals <- setdiff( unique(as.vector(edge)), tips )
+	internalorder <- order( tr1$nodetimes[ internals ], decreasing=TRUE)# root is last
+
+	## map old node order to new node order 
+	nodemap <- rep(NA, ape::Ntip(tr1)+ape::Nnode(tr1) )
+	nodemap[tips] <- tiporder 
+	newnode <- Ntip + Nnode 
+	for ( k in 1:Nnode  )
+	{
+			oldnode <- internals[internalorder[k]]
+			nodemap[oldnode] <- newnode 
+			newnode <- newnode - 1	
+	}
+	rnodemap <- rep(NA, N ) 
+	for (k in 1:length( nodemap ) ) if(!is.na(nodemap[k])) rnodemap[nodemap[k]] <- k
+
+	newedge <- cbind( nodemap[ edge[,1] ], nodemap[ edge[,2] ] )
+	newedge.length <- edge.length 
+	newtip.label <- paste0('t', 1:Ntip )
+	newtr <- structure( list(edge = newedge, edge.length = newedge.length
+				, Nnode = Nnode
+				, tip.label = newtip.label
+				, y1node = y1node 
+				, newy1node = nodemap[ y1node ]
+				, nodemap = nodemap 
+				, rnodemap = rnodemap
+		)
+		, class = c( 'slicephylo', 'phylo' )
+	)
+	newtr 
+}
 
 
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
@@ -337,24 +408,17 @@ plot.gpgmrf <- function( f )
 tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
 {
 
-	if (!inherits(tr, 'cggephylo' ) & inherits(tr,'phylo'))
+	if (!inherits(tr, 'cppephylo' ) & inherits(tr,'phylo'))
 	{
 		tr <- .maketreedata(tr)
 	}
-
 	stopifnot( logtaulb < logtauub ) 
+
 	logtaus = seq( (logtaulb), (logtauub), length = res )  
 
-	# cohorts in order 
-	nodeorder <- order( tr$internalnodetimes, decreasing=FALSE) 
-
-	# indices for forecasting 
-	starticohorts = floor( startpc*.01*length(nodeorder) )
-	endicohorts = floor( endpc*.01*length(nodeorder) )-1
-	icohorts <- starticohorts:endicohorts
-	if ( nobj < length( icohorts )){
-		icohorts <- seq( starticohorts, endicohorts, by = floor((endicohorts-starticohorts+1)/nobj))
-	}
+	gnc <- .getnodecohorts(tr, startpc, endpc, nobj)
+	icohorts <- gnc$icohorts 
+	nodeorder <- gnc$nodeorder
 
 	logtau0 <- (logtaulb + logtauub)/2
 	f = codls(tr, logtau0 ) # 
