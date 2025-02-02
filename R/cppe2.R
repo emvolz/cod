@@ -53,10 +53,13 @@
 	nodey <- do.call( c, nodeys )
 	nodey <- nodey / sd( nodey ) # standardise 
 	
-	# adjusted branch lengths  TODO does not include root...
+	# adjusted branch lengths  
 	whnobrlens <- (nodetimes[whno]-nodetimes[parent[whno]])
 	lbbrlen <- quantile( whnobrlens[ whnobrlens > 0 ], brquantile )
 	whnobrlens[ whnobrlens <= 0 ] <- lbbrlen 
+	# branch lengths 
+	brlens <- tr$nodetimes - tr$nodetimes[ tr$parent ]
+	brlens[ is.na(brlens) ] <- 0
 
 	rv = modifyList( tre 
 		, list( n = ape::Ntip(tre), nedge = ape::Nedge( tre ), nnode = ape::Nnode( tre )
@@ -73,6 +76,7 @@
 		 , whno = whno 
 		 , nodey = nodey 
 		 , whnobrlens = whnobrlens 
+		 , brlens = brlens
 		)
 	)
 	class(rv) <- c('phylo', 'cppephylo' ) 
@@ -332,10 +336,6 @@ plot.gpgmrf <- function( f )
 	list( icohorts = icohorts, nodeorder = nodeorder, nodetimes = sort( tr$internalnodetimes, decreasing=FALSE) )
 }
 
-# devianceexplained <- function( cohorts, nodeorder, nodetimes )
-# {
-# }
-
 .timeslicetree <- function( tr1, ntthreshold )
 {
 	stopifnot(inherits(tr1, 'cppephylo' ))
@@ -390,6 +390,48 @@ plot.gpgmrf <- function( f )
 	newtr 
 }
 
+# devianceexplained <- function( cohorts, nodeorder, nodetimes )
+# {
+# }
+
+
+.lbi <- function( tr, tau )
+{
+	stopifnot(inherits(tr, 'cppephylo' ))
+
+	brlens <- (tr$nodetimes - tr$nodetimes[ tr$parent ])
+	brlens[ is.na(brlens) ] <- 0
+	brlens <- brlens / tau 
+
+	lbi <- rep(NA, ape::Ntip(tr) + ape::Nnode(tr))
+	up <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
+	down <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
+
+	itip <- 1:ape::Ntip(tr)
+	iinternal <- (ape::Ntip(tr)+1):(ape::Ntip(tr) + ape::Nnode(tr))
+	up[itip] <- tau*(1-exp(-brlens[itip] ))
+
+	for (u in iinternal[ order( tr$nodetimes[iinternal], decreasing=TRUE)] ) # tips to root 
+	{
+		up[u] <- sum( up[ tr$daughters[[u]] ] )*exp(-brlens[u]) + tau*(1-exp(-brlens[u] ))
+	}
+  
+	for (a in iinternal[ order( tr$nodetimes[iinternal], decreasing=FALSE)] ) # root to tip
+	{
+		uv <- tr$daughters[[a]] 
+		for (u in uv)
+		{
+			down[u] <- (down[a] + sum( up[ setdiff(uv,u) ] ))*exp(-brlens[u]) + tau*(1-exp(-brlens[u]))
+		}
+	}
+
+	lbi <- down 
+	lbi[iinternal] <- lbi[iinternal] + sapply( iinternal, function(a) {
+		uv <- tr$daughters[[a]]
+		sum( up[uv])
+	})
+	lbi
+}
 
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 #' 
