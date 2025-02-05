@@ -350,7 +350,10 @@ plot.gpgmrf <- function( f )
 	Nnode <- length(unique( edge[,1] ))
 	Ntip <- N - Nnode 
 	tips <- setdiff( edge[,2] , edge[,1] ) # the new tips 
-	newtips<- tips[ tips > ape::Ntip(tr1)] # tips that were formerly internal nodes ; these should potentially have branch lengths extended 
+	newtips<- tips[ tips > ape::Ntip(tr1)] # tips that were formerly internal nodes  
+	## should have branch lengths extended to threshold time 
+		whichedgeextend <- edge[,2] %in% newtips 
+		edge.length[ whichedgeextend ] <- edge.length[ whichedgeextend ] + ntthreshold-tr1$nodetimes[edge[whichedgeextend,2]]
 	tiporder <- order(tr1$nodetimes[ tips ] )
 	internals <- setdiff( unique(as.vector(edge)), tips )
 	internalorder <- order( tr1$nodetimes[ internals ], decreasing=TRUE)# root is last
@@ -433,10 +436,61 @@ lbi <- function( tr, logtau )
 		uv <- tr$daughters[[a]]
 		sum( up[uv])
 	})
-	lbistat
+	list( coef= lbistat )
+
 }
 
+optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, res = 11, startpc = 50, endpc = 100, nobj = 100 ) 
+{
+	if (!inherits(tr, 'cppephylo' ) & inherits(tr,'phylo'))
+		tr <- .maketreedata(tr)
+	stopifnot( logtaulb < logtauub ) 
+	logtaus = seq( (logtaulb), (logtauub), length = res )  
+	logtau0 <- (logtaulb + logtauub)/2
+	# f = codls(tr, logtau0 ) # 
 
+	gnc <- .getnodecohorts(tr, startpc, endpc, nobj)
+	icohorts <- gnc$icohorts 
+	nodeorder <- gnc$nodeorder
+	cat( glue::glue("Evaluating {length(icohorts)} time slice trees. \n" ))
+	cat( '\n' )
+	obj <- c() 
+	# for (logtau in logtaus )
+	ofun <- function(logtau)
+	{
+		psis <- list()
+		ys <- list() 
+		brlens <- list() 
+		nts <- list()
+		for ( ic in icohorts )
+		{
+			ntth <- tr$internalnodetimes[ nodeorder[ic] ] 
+			sltr <- .timeslicetree( tr, ntth)
+			slf <- func( sltr, logtau )
+			x  <-  slf$coef
+			x[ is.na(x) ] <- 0
+			psis[[ic]] <- x 
+			ys[[ic]] <- rep(0, length(x) )
+			ys[[ic]][  sltr$newy1node ] <- 1
+			l <- rep(0, length(x))
+			l[ sltr$edge[,2] ] <- sltr$edge.length 
+			brlens[[ic]] <- l
+			nt <- ape::node.depth.edgelength( sltr )
+			nts[[ic]] <- nt / max(nt)  # relative node time 
+		}
+		mdf  <- data.frame( y = do.call( c, ys )
+			, psi = do.call( c, psis )
+			, relnodetime = do.call( c, nts )
+			, brlen = do.call( c, brlens )
+		)
+		m <- mgcv::gam( y ~ s(psi) + relnodetime + brlen , data = mdf )
+		print(c(  logtau, summary(m)$dev.expl )  )
+		obj <- summary(m)$dev.expl
+		obj 
+	}
+	# cbind( logtaus, obj )
+	optimise( ofun, lower = logtaulb, upper = logtauub, maximum=TRUE, tol = 1e-4 )
+}
 
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 #' 
