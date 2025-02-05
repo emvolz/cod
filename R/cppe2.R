@@ -1,5 +1,6 @@
 .maketreedata <- function(tre, brquantile=0.01)
 {
+	stopifnot( inherits(tre, 'phylo'))
 	n <- length( tre$tip.label)
 	nnode = ape::Nnode(tre)
 
@@ -348,7 +349,7 @@ plot.gpgmrf <- function( f )
 	yntimes <- tr1$nodetimes; 
 	yntimes[ yntimes < ntthreshold ] <- Inf 
 	yntimes[ 1:ape::Ntip(tr1)] <- Inf 
-	y1node <- which.min( yntimes )
+	y1node <- tr1$parent[ which.min( yntimes ) ] # ***
 
 	edgetodrop <- which( (tr1$nodetimes[ tr1$edge[,1] ] > ntthreshold) )
 	edge <- tr1$edge[ -edgetodrop , ]
@@ -395,10 +396,19 @@ plot.gpgmrf <- function( f )
 # }
 
 
-.lbi <- function( tr, tau )
+#' Compute the local branching index (LBI) 
+#' 
+#' @citation Neher, Richard A., Colin A. Russell, and Boris I. Shraiman. Elife 3 (2014): e03568.
+#' @param tr An ape::phylo 
+#' @param tau Smoothing parameter, numeric > 0 
+#' @return Vector of local branching index values for every node in the input tree 
+#' @export 
+lbi <- function( tr, tau )
 {
-	stopifnot(inherits(tr, 'cppephylo' ))
-
+	if (!inherits(tr, 'cppephylo' ))
+	{
+		tr <- .maketreedata(tr)
+	}
 	brlens <- (tr$nodetimes - tr$nodetimes[ tr$parent ])
 	brlens[ is.na(brlens) ] <- 0
 	brlens <- brlens / tau 
