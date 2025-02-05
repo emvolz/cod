@@ -340,27 +340,23 @@ plot.gpgmrf <- function( f )
 .timeslicetree <- function( tr1, ntthreshold )
 {
 	stopifnot(inherits(tr1, 'cppephylo' ))
-	# gnc <- .getnodecohorts(f$data, 50, 100 , 10)
-	# tr1 <- f$data 
-	# ## example threshold time 
-	# ntthreshold <- gnc$nodetimes[ gnc$icohorts[5] ]
 
-	# which node gets next coalescent event after ntthreshold 
-	yntimes <- tr1$nodetimes; 
-	yntimes[ yntimes < ntthreshold ] <- Inf 
-	yntimes[ 1:ape::Ntip(tr1)] <- Inf 
-	y1node <- tr1$parent[ which.min( yntimes ) ] # ***
-
-	edgetodrop <- which( (tr1$nodetimes[ tr1$edge[,1] ] > ntthreshold) )
+	ancaftert  <-  (tr1$nodetimes[ tr1$edge[,1] ] > ntthreshold) 
+	dgtraftert  <-  (tr1$nodetimes[ tr1$edge[,2] ] > ntthreshold) 
+	edgetodrop <- which( dgtraftert ) # any line that crosses th or is after th 
 	edge <- tr1$edge[ -edgetodrop , ]
 	edge.length <- tr1$edge.length[ -edgetodrop] 
 	N <- length( unique( as.vector(edge) )) 
 	Nnode <- length(unique( edge[,1] ))
 	Ntip <- N - Nnode 
-	tips <- setdiff( edge[,2] , edge[,1] )
+	tips <- setdiff( edge[,2] , edge[,1] ) # the new tips 
+	newtips<- tips[ tips > ape::Ntip(tr1)] # tips that were formerly internal nodes ; these should potentially have branch lengths extended 
 	tiporder <- order(tr1$nodetimes[ tips ] )
 	internals <- setdiff( unique(as.vector(edge)), tips )
 	internalorder <- order( tr1$nodetimes[ internals ], decreasing=TRUE)# root is last
+
+	droppednodes <- setdiff( as.vector( tr1$edge), as.vector(edge))
+	y1node <- tr1$parent[ droppednodes[ which.min(tr1$nodetimes[droppednodes]) ] ]
 
 	## map old node order to new node order 
 	nodemap <- rep(NA, ape::Ntip(tr1)+ape::Nnode(tr1) )
@@ -385,35 +381,32 @@ plot.gpgmrf <- function( f )
 				, newy1node = nodemap[ y1node ]
 				, nodemap = nodemap 
 				, rnodemap = rnodemap
+				, timethreshold = ntthreshold 
 		)
 		, class = c( 'slicephylo', 'phylo' )
 	)
 	newtr 
 }
 
-# devianceexplained <- function( cohorts, nodeorder, nodetimes )
-# {
-# }
-
-
 #' Compute the local branching index (LBI) 
 #' 
 #' @citation Neher, Richard A., Colin A. Russell, and Boris I. Shraiman. Elife 3 (2014): e03568.
 #' @param tr An ape::phylo 
-#' @param tau Smoothing parameter, numeric > 0 
+#' @param logtau Smoothing parameter
 #' @return Vector of local branching index values for every node in the input tree 
 #' @export 
-lbi <- function( tr, tau )
+lbi <- function( tr, logtau )
 {
 	if (!inherits(tr, 'cppephylo' ))
 	{
 		tr <- .maketreedata(tr)
 	}
+	tau <- exp( logtau )
 	brlens <- (tr$nodetimes - tr$nodetimes[ tr$parent ])
 	brlens[ is.na(brlens) ] <- 0
 	brlens <- brlens / tau 
 
-	lbi <- rep(NA, ape::Ntip(tr) + ape::Nnode(tr))
+	lbistat <- rep(NA, ape::Ntip(tr) + ape::Nnode(tr))
 	up <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
 	down <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
 
@@ -435,13 +428,15 @@ lbi <- function( tr, tau )
 		}
 	}
 
-	lbi <- down 
-	lbi[iinternal] <- lbi[iinternal] + sapply( iinternal, function(a) {
+	lbistat <- down 
+	lbistat[iinternal] <- lbistat[iinternal] + sapply( iinternal, function(a) {
 		uv <- tr$daughters[[a]]
 		sum( up[uv])
 	})
-	lbi
+	lbistat
 }
+
+
 
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 #' 
