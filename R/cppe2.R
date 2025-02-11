@@ -59,7 +59,7 @@
 	lbbrlen <- quantile( whnobrlens[ whnobrlens > 0 ], brquantile )
 	whnobrlens[ whnobrlens <= 0 ] <- lbbrlen 
 	# branch lengths 
-	brlens <- tr$nodetimes - tr$nodetimes[ tr$parent ]
+	brlens <- tre$nodetimes - tre$nodetimes[ tre$parent ]
 	brlens[ is.na(brlens) ] <- 0
 
 	rv = modifyList( tre 
