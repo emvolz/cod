@@ -440,22 +440,31 @@ lbi <- function( tr, logtau )
 
 }
 
-optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, res = 11, startpc = 50, endpc = 100, nobj = 100 ) 
+#' Optimise smoothing parameter for a given tree and branch statistic 
+#' 
+#' The minimum minimum prediction deviance is the criterian being maximised. 
+#' This function must be given a tree and a function (e.g. `codls` or `lbi`) which takes a tree and a smoothing parameter and returns a given branch statistic. 
+#' The branch statistic is associated with coalescence with future lineages (prediction of evolution) using a GAM and adjusting for branch lengths and distance from the root. 
+#' 
+#' @param tr A phylogenetic tree in ape::phylo format 
+#' @param logtaulb Lower bound of precision parameteters 
+#' @param logtauub Upper bound of precision parameteters 
+#' @param startpc The initial per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
+#' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
+#' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
+#' @return Output of `optimise`. $minimum contains the optimal smoothing parameter
+#' @export 
+optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, startpc = 50, endpc = 100, nobj = 100 ) 
 {
 	if (!inherits(tr, 'cppephylo' ) & inherits(tr,'phylo'))
 		tr <- .maketreedata(tr)
 	stopifnot( logtaulb < logtauub ) 
-	logtaus = seq( (logtaulb), (logtauub), length = res )  
-	logtau0 <- (logtaulb + logtauub)/2
-	# f = codls(tr, logtau0 ) # 
 
 	gnc <- .getnodecohorts(tr, startpc, endpc, nobj)
 	icohorts <- gnc$icohorts 
 	nodeorder <- gnc$nodeorder
 	cat( glue::glue("Evaluating {length(icohorts)} time slice trees. \n" ))
 	cat( '\n' )
-	obj <- c() 
-	# for (logtau in logtaus )
 	ofun <- function(logtau)
 	{
 		psis <- list()
@@ -488,7 +497,6 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, res = 11, startpc 
 		obj <- summary(m)$dev.expl
 		obj 
 	}
-	# cbind( logtaus, obj )
 	optimise( ofun, lower = logtaulb, upper = logtauub, maximum=TRUE, tol = 1e-4 )
 }
 
@@ -503,7 +511,7 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, res = 11, startpc 
 #' @param startpc The initial per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
 #' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
-#' @param weights Optional inverse probability weights for each sample 
+#' @param ipw Optional inverse probability weights for each sample 
 #' @return A data frame containing the loss function evaluated over a range of tau values 
 #' @export 
 tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
