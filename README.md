@@ -1,12 +1,12 @@
 # `cod`: Inference of Coalescent ODds in Phylogenetic Trees
 
-<img src="man/figures/logo.png" align="right" height="139" />
+<img src="man/figures/cod.png" align="right" height="139" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
 
-The `cod` R package provides tools for inferring variation in coalescent rates across branches in phylogenetic trees. It enables researchers to identify growing lineages, adjust for biased sampling, compute phylogenetic clusters, optimize cluster thresholds, and summarize rate variations.
+The `cod` R package provides tools for inferring variation in coalescent rates across branches in phylogenetic trees. It provides methods to identify growing lineages, adjust for biased sampling, compute phylogenetic clusters, optimize cluster thresholds, and summarize rate variations.
 
 ## Installation
 
