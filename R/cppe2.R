@@ -122,6 +122,7 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' @param logtau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
 #' @param profcontrol Optional list of arguments passed to `tauprofile`
 #' @param weights An optional vector (named or unnamed) of sample weights for each tip in the input tree
+#' @param ncpu Integer number of cpu's to use if parallel calculation of tau profile is desired 
 #' @return A COD GMRF model fit 
 #' 
 #' @examples 
@@ -148,7 +149,7 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' }
 #' 
 #' @export 
-codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
+codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu = 1 )
 {
 	if (!inherits( tr1, 'cppephylo' ) & inherits(tr1,'phylo'))
 	{
@@ -160,6 +161,7 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL )
 		tpargs <- modifyList( TPARGS, profcontrol )
 		tpargs$tr = tr1 
 		tpargs$ipw = weights
+		tpargs$ncpu = ncpu 
 		tpdf <- do.call( tauprofile, tpargs ) 
 		logtau <- tpdf$logtau[ which.min( tpdf$loss ) ] 
 		print( tpdf )
@@ -514,9 +516,10 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, startpc = 50, endp
 #' @param ipw Optional inverse probability weights for each sample 
 #' @return A data frame containing the loss function evaluated over a range of tau values 
 #' @export 
-tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL ) 
+tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL, ncpu = 1 ) 
 {
-
+	stopifnot( is.numeric( ncpu ))
+	ncpu = abs( floor( ncpu[1]  ) )
 	if (!inherits(tr, 'cppephylo' ) & inherits(tr,'phylo'))
 	{
 		tr <- .maketreedata(tr)
@@ -534,8 +537,9 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 
 	nodew <- .computenodew( tr, ipw )
 
-	loss <- c() 
-	for (logtau in logtaus )
+	#loss <- c() 
+	#for (logtau in logtaus )
+	loss <- parallel::mclapply( logtaus, function(logtau)
 	{
 		losses <- sapply( icohorts, function(i){
 			keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
@@ -551,8 +555,9 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 			beta1 =  Matrix::solve( QQ1, b1 ) |> as.vector()
 			sum( (f$y[f$coindices[[nodeorder[i+1]]]] - f$X[f$coindices[[nodeorder[i+1]]],] %*% beta1)^2 )
 		})
-		loss <- c( loss, mean(losses))
-	}
+		# loss <- c( loss, mean(losses))
+		mean(losses)
+	}, mc.cores = ncpu ) |> unlist() 
 	
 	odf <- data.frame( logtau = logtaus, loss = loss )
 	odf$optimal <- ''
