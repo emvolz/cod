@@ -387,6 +387,7 @@ plot.gpgmrf <- function( f )
 				, nodemap = nodemap 
 				, rnodemap = rnodemap
 				, timethreshold = ntthreshold 
+				, droppednodes = droppednodes 
 		)
 		, class = c( 'slicephylo', 'phylo' )
 	)
