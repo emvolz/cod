@@ -25,6 +25,7 @@ tr
 Metadata includes the year of sample collection, clinic where the sample was collected, and resistance scores to several classes of antibiotics. For the purposes of this vignette, we will consider a score of "2" to represent resistance. 
 ```{r}
 head(md)
+hist( md$Year, title = '', ylabel = '', xlabel = 'Year' )
 ```
 
 # Estimating coalescent odds 

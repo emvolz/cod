@@ -645,6 +645,7 @@ codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 	}
 	# psiintercept <- -log(A-1)
 	psiintercept <- log(2) - log(pmax(3,A)-2)
+	# psiintercept <- log(2) - log(pmax(2,A)-1)
 
 	# add root observation 
 	iroot <- which( is.na( f$data$parent ) )
@@ -704,9 +705,10 @@ codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 #' @param f A model fit from `codls`
 #' @param clth Numeric threshold change in coalescent log odds 
 #' @param rescale if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds
+#' @param includeinternals if TRUE (default), internal nodes are also included in cluster output
 #' @return A data frame with cluster asignment for each tip 
 #' @export 
-computeclusters <- function(f, clth, rescale=TRUE)
+computeclusters <- function(f, clth, rescale=TRUE, includeinternals=TRUE)
 {
 	clusters <- list() 
 	tr <- f$data 
@@ -723,14 +725,14 @@ computeclusters <- function(f, clth, rescale=TRUE)
 	nadded <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
 	for (i in 1:ape::Ntip(tr)) ntd[[i]] <- i 
 	for (i in (1+ape::Ntip(tr)):(ape::Ntip(tr)+ape::Nnode(tr)) ) ntd[[i]] <- NA
+	if ( includeinternals )
+		for (i in (1+ape::Ntip(tr)):(ape::Ntip(tr)+ape::Nnode(tr)) ) ntd[[i]] <- i
 	for ( ie in ape::postorder(tr))
 	{
 		u <- tr$edge[ie,1]
 		v <- tr$edge[ie,2]
-		tryCatch( ntd[[v]], error = function(e) browser() )
 		ntd[[u]] <- c( ntd[[u]], ntd[[v]] ) 
 		nadded[u] <- nadded[u]+1
-			# if ( ie %in% tocut ) browser() 
 		if ( (ie %in% tocut) & (nadded[u]==tr$ndesc[u]))  
 		{
 			clusters[[length(clusters)+1]] <-  na.omit( c( ntd[[u]], ntd[[v]] ) )
@@ -738,14 +740,24 @@ computeclusters <- function(f, clth, rescale=TRUE)
 		} 
 	}
 	cl1 <- setdiff( 1:ape::Ntip(tr), na.omit( do.call(c,clusters)) )
+	if ( includeinternals )
+		cl1 <- setdiff( 1:(ape::Ntip(tr) + ape::Nnode(tr)), na.omit( do.call(c,clusters)) )
 	clusters[[length(clusters)+1]] <-  cl1
 	clusterdf <- data.frame() 
 	for (ic in seq_along( clusters )){
 		cl <- clusters[[ic]]
 		if( length( cl ) > 0 )
 		{
+			tipcl <- cl[ cl <= ape::Ntip( tr )  ]
+			intcl <- cl[ cl > ape::Ntip( tr )  ]
+			tipdf <- NULL 
+			if ( length( tipcl ) > 0 )
+				tipdf  <-  data.frame( node = tipcl, tip.label = tr$tip.label[ tipcl ], clusterid = ic, psi = f$coef[tipcl] , tip = TRUE)
+			intdf <- NULL 
+			if( length( intcl ) > 0 )
+				intdf  <-  data.frame( node = intcl, tip.label = '', clusterid = ic, psi = f$coef[intcl] , tip = FALSE)
 			clusterdf <- rbind( clusterdf 
-			, data.frame( tip = cl, tip.label = tr$tip.label[ cl ], clusterid = ic, psi = f$coef[cl] )
+				, tipdf, intdf
 			)
 		}
 	}
