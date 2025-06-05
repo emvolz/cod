@@ -4,7 +4,7 @@
 \alias{computeclusters}
 \title{Compute phylogenetic clusters by cutting tree at branches with large changes in coalescent odds}
 \usage{
-computeclusters(f, clth, rescale = TRUE)
+computeclusters(f, clth, rescale = TRUE, includeinternals = TRUE)
 }
 \arguments{
 \item{f}{A model fit from `codls`}
@@ -12,6 +12,8 @@ computeclusters(f, clth, rescale = TRUE)
 \item{clth}{Numeric threshold change in coalescent log odds}
 
 \item{rescale}{if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds}
+
+\item{includeinternals}{if TRUE (default), internal nodes are also included in cluster output}
 }
 \value{
 A data frame with cluster asignment for each tip

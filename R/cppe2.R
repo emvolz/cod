@@ -175,7 +175,7 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu 
 
 	y = c( ary, tr1$nodey )
 
-	arw = sqrt( exp(logtau)/tr1$whnobrlens ) # sqrt(1/.) so variance prop to brlen 
+	arw =  exp(logtau)^2/tr1$whnobrlens 
 	nodew <- .computenodew( tr1, weights )
 	w = c( arw, nodew )
 	st2b <- Sys.time() 
@@ -546,7 +546,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 			keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
 			X1 = f$X[ keepinds, ]
 
-			arw = sqrt( exp(logtau)/tr$whnobrlens ) # sqrt(1/.) so variance propto brlen
+			arw =  exp(logtau)^2/tr$whnobrlens 
 			# nodew <- rep( 1, length(f$logoddsindices ))  # f used here 
 			w <- c( arw, nodew )
 			W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
@@ -570,6 +570,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 
 
 
+# deprecate? 
 .optimcodgmrf <- function( f , ...)
 {
 
@@ -589,7 +590,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 	ofun <- function(psi, logtau = f$logtau)
 	{
 		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
-			, sd =  sqrt( whnobrlens/exp(logtau)) 
+			, sd =  sqrt( whnobrlens )/exp(logtau)
 			, log=TRUE )
 
 		psi1 = psi[ ip ]
@@ -628,7 +629,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 #' @param ... Additional arguments are passed to `mgcv::gam`
 #' @return A COD GMRF model fit. Includes the GAM model fit.
 #' @export 
-codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
+codbinomial <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 {
 	f = codls( tr1, logtau, profcontrol )
 	logtau <- f$logtau 
@@ -683,7 +684,7 @@ codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 		}
 	}
 	K <- min( max(k,5), length( coef(f)))
-	pmat <-  exp(logtau)*pmat 
+	pmat <-  exp(logtau)^2*pmat 
 	rspmat <- rowSums( pmat  ) 
 	diag(pmat ) <- -rspmat 
 	st0 <- Sys.time() 
@@ -699,6 +700,62 @@ codml <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
 	f 
 }
 
+#' Fit a genealogical placement GMRF model using maximum likelihood 
+#' 
+#' Fits the COD GMRF model using maximum likelihood. Additional arguments are passed to `optim`. 
+#' If tau is not provided, `codls` is also used to optimise this parameter. 
+#' This method is slower than `codls` and is not recommended for trees with more than several hundred samples. 
+#' 
+#' The ML COD GMRF method does not currently support inverse probability weighting of samples. Use `codls` if sample weighting is needed.
+#' 
+#' @param tr1 Phylogenetic tree in ape::phylo format 
+#' @param logtau Precision parameter. If NULL, will invoke `tauprofile` to find best value. 
+#' @param profcontrol Optional list of arguments passed to `tauprofile`
+#' @param ... Additional arguments are passed to `mgcv::gam`
+#' @return A COD GMRF model fit. Includes the GAM model fit.
+#' @export 
+codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
+{
+	# logtau = 3
+	# logtauf = 3 
+	# profcontrol = list() 
+	f = codls( tr1, logtau, profcontrol )
+	logtau <- f$logtau 
+	tr <- f$data
+	tau <- exp( logtau )
+
+	psi0 <- f$coef 
+
+	denomegrids <- lapply( tr$coalescentcohorts, function(co){
+		z <- expand.grid(co,co) |> as.matrix() 
+		z <- z[ z[,2] > z[,1] , ] 
+		if ( is.null( nrow(z)  )) z <- t(z)
+		z
+	})
+
+	numercoords <- tr$edge[,2] 
+	llfun1 <- function(psi)
+	{
+		gmrfll <- dnorm( psi[tr$edge[,1]] - psi[tr$edge[,2] ], sd = sqrt(tr$edge.length)/tau, log = TRUE ) |> sum()
+		rho <- exp(psi)
+		llnumer <- sum( log( rho[numercoords] )) 
+		# sum( sapply( seq_along( tr$coalescentcohorts), function(i){
+		lldenom <- -sum( sapply( denomegrids, function(z){
+			log( sum(rho[z[,1]]*rho[z[,2]]) )
+		}))
+		gmrfll + llnumer + lldenom 
+	}
+
+	st0 <- Sys.time() 
+	o = optim( par = psi0, fn = llfun1, control = list(fnscale=-1, trace=6), method = 'BFGS', ...  )
+	st1 <- Sys.time() 
+	runtime <-  st1 - st0 
+
+	f$coef <- o$par  - mean(o$par)
+	f$fit <- o 
+	f$runtime <- st1 - st0 
+	f
+}
 
 #' Compute phylogenetic clusters by cutting tree at branches with large changes in coalescent odds 
 #' 

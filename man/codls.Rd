@@ -4,7 +4,7 @@
 \alias{codls}
 \title{Fit a COD GMRF model using weighted least squares}
 \usage{
-codls(tr1, logtau = NULL, profcontrol = list(), weights = NULL)
+codls(tr1, logtau = NULL, profcontrol = list(), weights = NULL, ncpu = 1)
 }
 \arguments{
 \item{tr1}{Phylogenetic tree in ape::phylo format}
@@ -14,6 +14,8 @@ codls(tr1, logtau = NULL, profcontrol = list(), weights = NULL)
 \item{profcontrol}{Optional list of arguments passed to `tauprofile`}
 
 \item{weights}{An optional vector (named or unnamed) of sample weights for each tip in the input tree}
+
+\item{ncpu}{Integer number of cpu's to use if parallel calculation of tau profile is desired}
 }
 \value{
 A COD GMRF model fit
