@@ -543,18 +543,22 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 	loss <- parallel::mclapply( logtaus, function(logtau)
 	{
 		losses <- sapply( icohorts, function(i){
-			keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
-			X1 = f$X[ keepinds, ]
-
-			arw =  exp(logtau)^2/tr$whnobrlens 
-			# nodew <- rep( 1, length(f$logoddsindices ))  # f used here 
-			w <- c( arw, nodew )
-			W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
-			y1 = f$y[ keepinds ] # f used here 
-			QQ1 <- Matrix::t(X1) %*% W1 %*% X1 
-			b1 <- Matrix::t(X1) %*% W1 %*% y1 
-			beta1 =  Matrix::solve( QQ1, b1 ) |> as.vector()
-			sum( (f$y[f$coindices[[nodeorder[i+1]]]] - f$X[f$coindices[[nodeorder[i+1]]],] %*% beta1)^2 )
+			tryCatch( {
+				keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
+				X1 = f$X[ keepinds, ]
+				arw =  exp(logtau)^2/tr$whnobrlens 
+				# nodew <- rep( 1, length(f$logoddsindices ))  # f used here 
+				w <- c( arw, nodew )
+				W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
+				y1 = f$y[ keepinds ] # f used here 
+				QQ1 <- Matrix::t(X1) %*% W1 %*% X1 
+				b1 <- Matrix::t(X1) %*% W1 %*% y1 
+				beta1 =  Matrix::solve( QQ1, b1 ) |> as.vector()
+				sum( (f$y[f$coindices[[nodeorder[i+1]]]] - f$X[f$coindices[[nodeorder[i+1]]],] %*% beta1)^2 )
+			}, error = function(e) {
+				# message(e);  
+				Inf 
+			})
 		})
 		# loss <- c( loss, mean(losses))
 		mean(losses)
@@ -629,7 +633,7 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 #' @param ... Additional arguments are passed to `mgcv::gam`
 #' @return A COD GMRF model fit. Includes the GAM model fit.
 #' @export 
-codbinomial <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), ... )
+codbinomial <- function(tr1, logtau = NULL, k=Inf, profcontrol = list(), ... )
 {
 	f = codls( tr1, logtau, profcontrol )
 	logtau <- f$logtau 
@@ -714,7 +718,7 @@ codbinomial <- function(tr1, logtau = c(0, NULL ), k=Inf, profcontrol = list(), 
 #' @param ... Additional arguments are passed to `mgcv::gam`
 #' @return A COD GMRF model fit. Includes the GAM model fit.
 #' @export 
-codml <- function(tr1, logtau = c(0, NULL ), profcontrol = list(), ... )
+codml <- function(tr1, logtau = NULL, profcontrol = list(), ... )
 {
 	# logtau = 3
 	# logtauf = 3 
