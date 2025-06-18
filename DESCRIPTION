@@ -1,8 +1,8 @@
 Package: cod
 Type: Package
 Title: Inference of Coalescent ODds in Phylogenetic Trees
-Version: 0.4.1
-Date: 2025-06-05
+Version: 0.5.0
+Date: 2025-06-18
 Author: Erik Volz
 Maintainer: Erik Volz <e.volz@imperial.ac.uk>
 Description: Provides models for inferring variation in coalescent rates across 

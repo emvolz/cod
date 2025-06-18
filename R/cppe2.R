@@ -40,20 +40,29 @@
 	nr = length(whno)
 
 	# precomp dep variable 
-	nodeys = lapply( 1:ape::Nnode(tre), function(j){
+	nodeys2 = lapply( 1:ape::Nnode(tre), function(j){
 		cohort= coalescentcohorts[[j]]
 		dgtrs = daughters[[ j+n  ]]
 		A = length(cohort) 
-
 		if ( A < 3 ) return( rep(0, A ) )
-		y <- rep( -(2/A^1)*(log(2)+log(A-2)), A )
-		y[ cohort %in% dgtrs ] <-  ((A-2)/A^1)*(log(2) + log(A-2) )
-
+		P0 <- 2 / A 
+		y <- rep( -P0/(P0*(1-P0)^2), A )
+		y[ cohort %in% dgtrs ] <-(1-P0)/(P0*(1-P0)^2)
 		y
 	})
-	nodey <- do.call( c, nodeys )
-	nodey <- nodey / sd( nodey ) # standardise 
-	
+	nodey2 <- do.call( c, nodeys2) 
+	# weights 
+	yw2 = lapply( 1:ape::Nnode(tre), function(j){
+		cohort= coalescentcohorts[[j]]
+		A = length(cohort) 
+		if ( A < 3 ) return( rep(0, A ) )
+		P0 <- 2 / A 
+		w = P0*(1-P0)
+		rep(w, A ) 
+	})
+	yw2 <- do.call( c, yw2) 
+
+
 	# adjusted branch lengths  
 	whnobrlens <- (nodetimes[whno]-nodetimes[parent[whno]])
 	lbbrlen <- quantile( whnobrlens[ whnobrlens > 0 ], brquantile )
@@ -75,7 +84,8 @@
 		 , coalescentcohorts = coalescentcohorts
 		 , nr = nr 
 		 , whno = whno 
-		 , nodey = nodey 
+		 , nodey = nodey2 
+		 , yw2 = yw2 
 		 , whnobrlens = whnobrlens 
 		 , brlens = brlens
 		)
@@ -88,8 +98,8 @@
 .computenodew <- function( tr1, ipw  )
 {
 	stopifnot( inherits( tr1, 'cppephylo' ))
-	nodey <- tr1$nodey 
-	nodew <- rep( 1, length( nodey ))
+	yw2 <- tr1$yw2 
+	nodew <- rep( 1, length( yw2 ))
 	if( !is.null( ipw )){
 		stopifnot( length(ipw )==ape::Ntip(tr1))
 		stopifnot( is.numeric(ipw ) )
@@ -109,7 +119,7 @@
 		nodew <- do.call( c, nodews )
 		nodew <- nodew / mean( nodew )
 	}
-	nodew 
+	nodew * yw2
 }
 
 
@@ -173,10 +183,10 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu 
 
 	ary = rep(0, nr)
 
-	y = c( ary, tr1$nodey )
+	y = c( ary, tr1$nodey ) # V2 
 
 	arw =  exp(logtau)^2/tr1$whnobrlens 
-	nodew <- .computenodew( tr1, weights )
+	nodew <- .computenodew( tr1, weights )  # V2 
 	w = c( arw, nodew )
 	st2b <- Sys.time() 
 
@@ -217,7 +227,7 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu 
 
 	st3 <- Sys.time() 
 
-	structure( list( coef = f2beta 
+	structure( list( coef = f2beta - mean( f2beta )
 		, logtau = logtau 
 		, data = tr1 
 		, X = X 
