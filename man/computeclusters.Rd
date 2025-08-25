@@ -4,12 +4,12 @@
 \alias{computeclusters}
 \title{Compute phylogenetic clusters by cutting tree at branches with large changes in coalescent odds}
 \usage{
-computeclusters(f, clth, rescale = TRUE, includeinternals = TRUE)
+computeclusters(f, clth = NULL, rescale = TRUE, includeinternals = TRUE)
 }
 \arguments{
 \item{f}{A model fit from `codls`}
 
-\item{clth}{Numeric threshold change in coalescent log odds}
+\item{clth}{Numeric threshold change in coalescent log odds. If NULL, will guess a good threshold based on the CH index}
 
 \item{rescale}{if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds}
 

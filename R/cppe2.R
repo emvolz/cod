@@ -223,7 +223,8 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu 
 	W <- Matrix::Diagonal( x = w )
 	QQ <- Matrix::t(X) %*% W %*% X 
 	b  <- Matrix::t(X) %*% W %*% y 
-	f2beta =  Matrix::solve( QQ, b ) |> as.vector()
+	f2beta =  tryCatch( Matrix::solve( QQ, b ) |> as.vector()
+		, error = function(e)  {rep(NA, ncol( X )) } )
 
 	st3 <- Sys.time() 
 
@@ -775,23 +776,32 @@ codml <- function(tr1, logtau = NULL, profcontrol = list(), ... )
 #' Compute phylogenetic clusters by cutting tree at branches with large changes in coalescent odds 
 #' 
 #' @param f A model fit from `codls`
-#' @param clth Numeric threshold change in coalescent log odds 
+#' @param clth Numeric threshold change in coalescent log odds. If NULL, will guess a good threshold based on the CH index
 #' @param rescale if TRUE (default), coalescent log odds are rescaled (mean zero, unit variance) prior to applying thresholds
 #' @param includeinternals if TRUE (default), internal nodes are also included in cluster output
 #' @return A data frame with cluster asignment for each tip 
 #' @export 
-computeclusters <- function(f, clth, rescale=TRUE, includeinternals=TRUE)
+computeclusters <- function(f, clth = NULL, rescale=TRUE, includeinternals=TRUE)
 {
 	clusters <- list() 
 	tr <- f$data 
+	scpsi <-  f$coef  
 	if (rescale)
 		scpsi <- scale( f$coef ) 
+
+	if ( is.null( clth )){
+		ths <-  quantile(  abs( scpsi[ tr$edge[, 2] ] - scpsi[ tr$edge[,1] ] ), prob = seq( 1-.25, 1-.005, length = 25 ))
+		chdf <- chindices(f, clths = ths, rescale=rescale)
+		print( chdf )
+		clth <- chdf$threshold[ which.max(chdf$CH) ]
+	}
+
 	tocut <- apply( tr$edge, MAR=1, FUN=function(uv){
 		u = uv[1] 
 		v = uv[2] 
 		(scpsi[v] - scpsi[u]) > clth 
 	}) |> which() 
-	table( tocut )
+	# table( tocut )
 	ntd <- lapply(  1:(ape::Ntip(tr)+ape::Nnode(tr)), function(x) c() )
 	clusters <- list() 
 	nadded <- rep(0, ape::Ntip(tr) + ape::Nnode(tr))
