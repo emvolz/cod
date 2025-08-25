@@ -4,7 +4,7 @@
 \alias{codbinomial}
 \title{Fit a genealogical placement GMRF model using maximum likelihood}
 \usage{
-codbinomial(tr1, logtau = c(0, NULL), k = Inf, profcontrol = list(), ...)
+codbinomial(tr1, logtau = NULL, k = Inf, profcontrol = list(), ...)
 }
 \arguments{
 \item{tr1}{Phylogenetic tree in ape::phylo format}

@@ -4,7 +4,7 @@
 \alias{codml}
 \title{Fit a genealogical placement GMRF model using maximum likelihood}
 \usage{
-codml(tr1, logtau = c(0, NULL), profcontrol = list(), ...)
+codml(tr1, logtau = NULL, profcontrol = list(), ...)
 }
 \arguments{
 \item{tr1}{Phylogenetic tree in ape::phylo format}
