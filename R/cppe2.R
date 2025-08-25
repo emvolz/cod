@@ -455,9 +455,9 @@ lbi <- function( tr, logtau )
 
 #' Optimise smoothing parameter for a given tree and branch statistic 
 #' 
-#' The minimum minimum prediction deviance is the criterian being maximised. 
+#' This function maximises the deviance explained of future evolution of the given branch statistic via its dependence on a smoothing parameter (tau). 
 #' This function must be given a tree and a function (e.g. `codls` or `lbi`) which takes a tree and a smoothing parameter and returns a given branch statistic. 
-#' The branch statistic is associated with coalescence with future lineages (prediction of evolution) using a GAM and adjusting for branch lengths and distance from the root. 
+#' The association of the branch statistic and future coalescent events (prediction of evolution) is modelled using a GAM and adjusting for branch lengths and distance from the root. 
 #' 
 #' @param tr A phylogenetic tree in ape::phylo format 
 #' @param logtaulb Lower bound of precision parameteters 
@@ -506,11 +506,12 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, startpc = 50, endp
 			, brlen = do.call( c, brlens )
 		)
 		m <- mgcv::gam( y ~ s(psi) + relnodetime + brlen , data = mdf )
-		print(c(  logtau, summary(m)$dev.expl )  )
+		print( data.frame( `log(tau)` = logtau, deviance.expl=summary(m)$dev.expl )  )
 		obj <- summary(m)$dev.expl
 		obj 
 	}
-	optimise( ofun, lower = logtaulb, upper = logtauub, maximum=TRUE, tol = 1e-4 )
+	o = optimise( ofun, lower = logtaulb, upper = logtauub, maximum=TRUE, tol = 1e-4 )
+	data.frame(  logtau = o$maximum, dev.expl = o$objective  )
 }
 
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
