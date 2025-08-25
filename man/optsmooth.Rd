@@ -31,7 +31,7 @@ optsmooth(
 Output of `optimise`. $minimum contains the optimal smoothing parameter
 }
 \description{
-The minimum minimum prediction deviance is the criterian being maximised. 
+This function maximises the deviance explained of future evolution of the given branch statistic via its dependence on a smoothing parameter (tau). 
 This function must be given a tree and a function (e.g. `codls` or `lbi`) which takes a tree and a smoothing parameter and returns a given branch statistic. 
-The branch statistic is associated with coalescence with future lineages (prediction of evolution) using a GAM and adjusting for branch lengths and distance from the root.
+The association of the branch statistic and future coalescent events (prediction of evolution) is modelled using a GAM and adjusting for branch lengths and distance from the root.
 }
