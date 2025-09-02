@@ -407,7 +407,7 @@ plot.gpgmrf <- function( f )
 
 #' Compute the local branching index (LBI) 
 #' 
-#' @citation Neher, Richard A., Colin A. Russell, and Boris I. Shraiman. Elife 3 (2014): e03568.
+#' @references Neher, Richard A., Colin A. Russell, and Boris I. Shraiman. Elife 3 (2014): e03568.
 #' @param tr An ape::phylo 
 #' @param logtau Smoothing parameter
 #' @return Vector of local branching index values for every node in the input tree 

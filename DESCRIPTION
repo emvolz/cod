@@ -13,4 +13,5 @@ Depends: Matrix (>= 1.7), ape (>= 5.0), glue (>= 1.0.0), mgcv (>= 1.9-1), parall
 Suggests: ggtree (>= 3.12.0), ggplot2 (>= 3.0.0), knitr, rmarkdown
 VignetteBuilder: knitr
 License: MIT
+Encoding: UTF-8
 RoxygenNote: 7.3.2

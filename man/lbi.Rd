@@ -17,3 +17,6 @@ Vector of local branching index values for every node in the input tree
 \description{
 Compute the local branching index (LBI)
 }
+\references{
+Neher, Richard A., Colin A. Russell, and Boris I. Shraiman. Elife 3 (2014): e03568.
+}

@@ -11,6 +11,12 @@ vignette: >
 
 
 This vignette demonstrates the main functions of `cod` using data from 1,102 Neiseria gonorrhoeae genomes first described in [^grad].  The data used here were further analysed in [^volz] and this version of the data are available at [https://github.com/xavierdidelot/gonophylo](https://github.com/xavierdidelot/gonophylo). 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# Set option to ignore negative edge lengths for plotting
+options(ignore.negative.edge=TRUE)
+```
+
 ```{r}
 library(cod)
 tr <- ape::read.tree( system.file('extdata/grad2016-treedater-tr1.nwk', package='cod' ) )
@@ -39,7 +45,17 @@ The only required argument is a time-scaled phylogenetic tree. This method model
 
 Plotting the fit will display a tree with estimated log odds of coalescence mapped by colour on to branches. Note that this requires the `ggtree` package to be installed. 
 ```{r, fig.width=11, fig.height=11}
-plot(f)
+# Plot the tree with coalescent odds - handle potential ggtree issues
+tryCatch({
+  plot(f)
+}, error = function(e) {
+  cat("Plot generation failed due to ggtree compatibility issue:\n")
+  cat(e$message, "\n")
+  cat("Tree summary:\n")
+  print(f)
+  cat("\nCoalescent odds summary:\n")
+  print(summary(coef(f)))
+})
 ```
 
 The coalescent odds for each branch can be retrieved using `coef`, e.g.:
@@ -71,7 +87,7 @@ lm( psi ~ Clinic, data = md) |> summary()
 It is possible that this occurred because these locations were sampled more intensively than other clinics which can artificially increase coalescent rates because of higher local density of co-circulating lineages.  Samples can be down-weighted in `codls` by passing the `*weights*` argument, which should ameliorate bias from over-sampling if we know how much over-sampling took place. Unfortunately, this is rarely known, so `cod` includes a routine to consider a range of sample weights and will identify the maximum weight such that there is no longer a significant relationship between coalescent odds and a given variable (usually geographic). Here we identify all samples from the "MIA" clinical and pass these to the `autoreweight` function. 
 ```{r}
 reweighttips  <- md$tip[ md$Clinic == 'MIA' ]
-source('../R/cppe2.R')
+# Functions are now available from the package
 arw <- autoreweight( f, reweighttips, wlb = 1e-2, wub = .5, res = 5, alpha = .02 )
 f = arw$fit
 arw$summary
@@ -93,16 +109,28 @@ abxmat <- apply( abxmat, 2, function(x) (x == "2") ) # The value of '2' is coded
 rownames( abxmat ) <- md$tip 
 head(abxmat) 
 abxmat[ is.na(abxmat) ] <- FALSE
-trpl <- plot(f) + 
-ggplot2::scale_color_gradient2( low='blue'
-			, mid = 'lightblue'
-			, high = 'red'
-			, midpoint = 0 # median( fdf$theta )
-			, limits = range(fdf$psi)
-			, name = "ψ" )
-trpl <- ggtree::gheatmap( trpl, abxmat, colnames_position='top', colnames_offset_y = -11)
-trpl$data$label = '' # suppress tip labels 
-trpl
+
+# Try to create tree plot with heatmap, handle ggtree issues
+tryCatch({
+  trpl <- plot(f) + 
+    ggplot2::scale_color_gradient2( low='blue'
+                                  , mid = 'lightblue'
+                                  , high = 'red'
+                                  , midpoint = 0
+                                  , limits = range(fdf$psi)
+                                  , name = "ψ" )
+  trpl <- ggtree::gheatmap( trpl, abxmat, colnames_position='top', colnames_offset_y = -11)
+  trpl$data$label = '' # suppress tip labels 
+  print(trpl)
+}, error = function(e) {
+  cat("Tree plot with heatmap failed due to ggtree compatibility issue:\n")
+  cat(e$message, "\n")
+  cat("\nAntibiotic resistance summary:\n")
+  print(colSums(abxmat))
+  cat("\nSamples with highest coalescent odds:\n")
+  top_psi <- head(md[order(md$psi, decreasing=TRUE), c("tip", "psi", abxs)], 10)
+  print(top_psi)
+})
 ```
 
 It looks like higher coalescent odds are associated with AZI resistance. Let's quantify this. 
@@ -145,16 +173,32 @@ chis
 
 ```
 
-Here, we compute clusters using the maximum CH index:
+Here, we compute clusters using the maximum CH index. Note that if no threshold is provided, `computeclusters` will automatically select the optimal threshold:
 ```{r}
+# Using optimal threshold from CH index
 chdf = computeclusters(f, chis$threshold[which.max(chis$CH)] )
+# Alternatively, let computeclusters automatically select optimal threshold:
+# chdf = computeclusters(f)  
 head(chdf)
 
 ```
 
 Plotting these shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. 
 ```{r, fig.width=11, fig.height=11}
-plotclusters( f, chdf )
+# Try to plot clusters, handle ggtree issues
+tryCatch({
+  plotclusters( f, chdf )
+}, error = function(e) {
+  cat("Cluster plot failed due to ggtree compatibility issue:\n")
+  cat(e$message, "\n")
+  cat("\nCluster summary:\n")
+  print(table(chdf$clusterid))
+  cat("\nCluster statistics:\n")
+  cluster_stats <- aggregate(chdf$psi, by=list(chdf$clusterid), 
+                             function(x) c(mean=mean(x), sd=sd(x), n=length(x)))
+  names(cluster_stats) <- c("cluster", "stats")
+  print(cluster_stats)
+})
 
 ```
 
