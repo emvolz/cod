@@ -799,7 +799,7 @@ computeclusters <- function(f, clth = NULL, rescale=TRUE, includeinternals=TRUE)
 	tocut <- apply( tr$edge, MAR=1, FUN=function(uv){
 		u = uv[1] 
 		v = uv[2] 
-		(scpsi[v] - scpsi[u]) > clth 
+		abs(scpsi[v] - scpsi[u]) > clth 
 	}) |> which() 
 	# table( tocut )
 	ntd <- lapply(  1:(ape::Ntip(tr)+ape::Nnode(tr)), function(x) c() )
