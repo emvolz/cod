@@ -87,9 +87,6 @@ For detailed documentation on functions and their parameters, use the R help sys
 ?autoreweight
 ```
 
-The package includes a detailed vignette demonstrating analysis of Neisseria gonorrhoeae:
-
-* [N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification & sample reweighting](vignettes/ngono.html)
 
 ## Citation
 
@@ -100,7 +97,3 @@ A manuscript describing the methods in this package is currently in preparation.
 
 This package is available under the MIT License. See the LICENSE file for more information.
 
-## Author
-
-Erik Volz  
-e.volz@imperial.ac.uk
