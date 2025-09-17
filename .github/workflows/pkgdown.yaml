@@ -31,6 +31,12 @@ jobs:
         with:
           use-public-rspm: true
 
+      - name: Install latest ggtree
+        run: |
+          install.packages("BiocManager")
+          BiocManager::install("ggtree", force = TRUE)
+        shell: Rscript {0}
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgdown, local::.
