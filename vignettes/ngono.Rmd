@@ -41,7 +41,7 @@ The main function to estimate coalescent odds using weighted least squares is `c
 f <- codls( tr )
 f
 ```
-The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If indepently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `tauprofile` function. 
+The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If indepently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `tauprofile` function. You can also speed up `codls` by using multiple CPUs with the `ncpu` argument. 
 
 Plotting the fit will display a tree with estimated log odds of coalescence mapped by colour on to branches. Note that this requires the `ggtree` package to be installed. 
 ```{r, fig.width=11, fig.height=11}
@@ -81,14 +81,19 @@ head( md )
 If we examine the relationship between coalescent odds and where samples originated (Clinic) there are a few clinics with significantly higher values: 
 ```{r}
 table( md$Clinic ) |> sort() 
-lm( psi ~ Clinic, data = md) |> summary() 
+s <- lm( psi ~ Clinic, data = md) |> summary() 
+s
 ```
 
 It is possible that this occurred because these locations were sampled more intensively than other clinics which can artificially increase coalescent rates because of higher local density of co-circulating lineages.  Samples can be down-weighted in `codls` by passing the `*weights*` argument, which should ameliorate bias from over-sampling if we know how much over-sampling took place. Unfortunately, this is rarely known, so `cod` includes a routine to consider a range of sample weights and will identify the maximum weight such that there is no longer a significant relationship between coalescent odds and a given variable (usually geographic). Here we identify all samples from the "MIA" clinical and pass these to the `autoreweight` function. 
 ```{r}
-reweighttips  <- md$tip[ md$Clinic == 'MIA' ]
-# Functions are now available from the package
+# Clinics associated with psi :
+signifclinics <- rownames(s$coefficients)[ s$coefficients[ , 4]  < .1 ]
+signifclinics <- substr(signifclinics, 7,9 )
+# Subset of tips from clinics associated with psi :
+reweighttips  <- md$tip[ md$Clinic %in% signifclinics ]
 arw <- autoreweight( f, reweighttips, wlb = 1e-2, wub = .5, res = 5, alpha = .02 )
+# TODO  fix behaviour when no optimal weight found 
 f = arw$fit
 arw$summary
 arw$optimalweight
@@ -133,7 +138,7 @@ tryCatch({
 })
 ```
 
-It looks like higher coalescent odds are associated with AZI resistance. Let's quantify this. 
+It looks like higher coalescent odds are associated with AZI resistance and no other abx shows a positive effect. Let's quantify this. 
 Here we do a linear regression of coalescent odds on each abx and time, then infer the mean psi at the end of sampling (year 2013). 
 ```{r}
 md$t  <- md$Year - min(md$Year)
