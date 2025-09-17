@@ -189,22 +189,20 @@ head(chdf)
 ```
 
 Plotting these shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. 
-```{r, fig.width=11, fig.height=11}
-# Try to plot clusters, handle ggtree issues
-tryCatch({
-  plotclusters( f, chdf )
-}, error = function(e) {
-  cat("Cluster plot failed due to ggtree compatibility issue:\n")
-  cat(e$message, "\n")
-  cat("\nCluster summary:\n")
-  print(table(chdf$clusterid))
-  cat("\nCluster statistics:\n")
-  cluster_stats <- aggregate(chdf$psi, by=list(chdf$clusterid), 
-                             function(x) c(mean=mean(x), sd=sd(x), n=length(x)))
-  names(cluster_stats) <- c("cluster", "stats")
-  print(cluster_stats)
-})
+![Cluster visualization showing phylogenetic tree with heatmap of cluster assignments](ngonoclust.png)
 
+```{r}
+# Cluster summary statistics
+cat("Cluster summary:\n")
+print(table(chdf$clusterid))
+
+cat("\nCluster statistics (coalescent odds by cluster):\n")
+cluster_stats <- aggregate(chdf$psi, by=list(chdf$clusterid),
+                           function(x) c(mean=mean(x, na.rm=TRUE),
+                                       sd=sd(x, na.rm=TRUE),
+                                       n=length(x)))
+names(cluster_stats) <- c("cluster", "psi_stats")
+print(cluster_stats)
 ```
 
 # References 
