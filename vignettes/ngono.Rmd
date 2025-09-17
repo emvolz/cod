@@ -93,12 +93,12 @@ signifclinics <- substr(signifclinics, 7,9 )
 # Subset of tips from clinics associated with psi :
 reweighttips  <- md$tip[ md$Clinic %in% signifclinics ]
 arw <- autoreweight( f, reweighttips, wlb = 1e-2, wub = .5, res = 5, alpha = .02 )
-# TODO  fix behaviour when no optimal weight found 
 f = arw$fit
 arw$summary
-arw$optimalweight
 ```
 Note that in some cases, the association will not disappear even if the weight is zero because lineages surrounding the given samples also have higher coalescent odds. In these cases, the relationship is more likely to be authentic. 
+That is exactly what we see here. Even when weighting these samples at 1% (unrealistically low) there remains a significant association with coalescent odds. 
+Consequently, this fit will be identical to the original fit. 
 
 
 
