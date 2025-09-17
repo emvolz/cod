@@ -188,7 +188,8 @@ head(chdf)
 
 ```
 
-Plotting these shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. 
+Plotting these shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. The clusters can be visualised by running `plotclusters(f, chdf)`.
+
 ![Cluster visualization showing phylogenetic tree with heatmap of cluster assignments](ngonoclust.png)
 
 ```{r}
