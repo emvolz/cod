@@ -8,13 +8,15 @@
 
 The `cod` R package provides tools for inferring variation in coalescent rates across branches in phylogenetic trees. It provides methods to identify growing lineages, adjust for biased sampling, compute phylogenetic clusters, optimize cluster thresholds, and summarize rate variations.
 
+For worked examples and detailed usage, see package documentation and vigettes at [https://emvolz.github.io/cod/](https://emvolz.github.io/cod/). 
+
 ## Installation
 
 You can install `cod` from GitHub using `devtools`:
 
 ```r
 # install.packages("devtools")
-devtools::install_github("erikvolz/cod")
+devtools::install_github("emvolz/cod")
 ```
 
 ## Dependencies
