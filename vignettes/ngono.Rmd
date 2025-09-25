@@ -1,5 +1,5 @@
 ---
-title: "N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification & sample reweighting"
+title: "Neisseria gonorrheae: Computing coalescent odds, identifying growing lineages, cluster identification & sample reweighting"
 author: "Erik Volz"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -10,7 +10,7 @@ vignette: >
 ---
 
 
-This vignette demonstrates the main functions of `cod` using data from 1,102 Neiseria gonorrhoeae genomes first described in [^grad].  The data used here were further analysed in [^volz] and this version of the data are available at [https://github.com/xavierdidelot/gonophylo](https://github.com/xavierdidelot/gonophylo). 
+This vignette demonstrates the main functions of `cod` using data from 1,102 Neisseria gonorrhoeae genomes first described in [^grad].  The data used here were further analysed in [^volz] and the data analysed here is available at [https://github.com/emvolz/cod/tree/main/inst/extdata](https://github.com/emvolz/cod/tree/main/inst/extdata). 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 # Set option to ignore negative edge lengths for plotting
@@ -23,7 +23,7 @@ tr <- ape::read.tree( system.file('extdata/grad2016-treedater-tr1.nwk', package=
 md <- read.csv( system.file( 'extdata/grad2016-a2md.csv' , package='cod' ) ) 
 ```
 
-This is a time-scaled phylogeny estimated with the `treedater` R package. 
+This is a time-scaled phylogeny estimated using `phyml`, `ClonalFrameML` and the `treedater` R package. 
 ```{r}
 tr 
 ```
@@ -31,7 +31,7 @@ tr
 Metadata includes the year of sample collection, clinic where the sample was collected, and resistance scores to several classes of antibiotics. For the purposes of this vignette, we will consider a score of "2" to represent resistance. 
 ```{r}
 head(md)
-hist( md$Year, title = '', ylabel = '', xlabel = 'Year' )
+hist( md$Year, main = '', ylab = '', xlab = 'Year' )
 ```
 
 # Estimating coalescent odds 
@@ -41,7 +41,7 @@ The main function to estimate coalescent odds using weighted least squares is `c
 f <- codls( tr )
 f
 ```
-The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If indepently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `tauprofile` function. You can also speed up `codls` by using multiple CPUs with the `ncpu` argument. 
+The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If independently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `tauprofile` function. You can also speed up `codls` by using multiple CPUs with the `ncpu` argument. 
 
 Plotting the fit will display a tree with estimated log odds of coalescence mapped by colour on to branches. Note that this requires the `ggtree` package to be installed. 
 ```{r, fig.width=11, fig.height=11}
@@ -188,7 +188,7 @@ head(chdf)
 
 ```
 
-Plotting these shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. The clusters can be visualised by running `plotclusters(f, chdf)`.
+Plotting this shows that one cluster very closely matches a clade with high levels of AZI resistance and high coalescent odds, so an alternative way to analyse these data would be to identify clusters with high coalescent odds and then characterise resistance patters within these clusters. The clusters can be visualised by running `plotclusters(f, chdf)`.
 
 ![Cluster visualization showing phylogenetic tree with heatmap of cluster assignments](ngonoclust.png)
 
