@@ -919,11 +919,11 @@ chindices <- function(f, clths = seq( .1, 1.5, length = 20 ), rescale=TRUE)
 autoreweight <- function(f, rwtips, wlb = .01, wub = .5, res = 10, alpha = .05 ) {
 	tr <- f$data 
 	V <- rep(FALSE, ape::Ntip(tr)) |> setNames(tr$tip.label )
-	V[ reweighttips ] <- TRUE 
+	V[ rwtips ] <- TRUE 
 	w <- rep(1, ape::Ntip(tr)) |> setNames( tr$tip.label)
 	ws <- seq( wlb, wub, length=res )
 	slms <- lapply( ws, function(ww) {
-		w[ reweighttips ] <- ww 
+		w[ rwtips ] <- ww 
 		ff = codls( tr, logtau = f$logtau , weights = w)
 		slm <- lm( coef(ff)[1:ape::Ntip(tr)] ~ V) |> summary() 
 		slm
@@ -934,7 +934,7 @@ autoreweight <- function(f, rwtips, wlb = .01, wub = .5, res = 10, alpha = .05 )
 	sdf <- data.frame( sampleweight=ws, p = ps )
 	if( max(sdf$p)>alpha ){
 		optweight <- max( sdf$sampleweight[ sdf$p > alpha ] )
-		w[ reweighttips ] <- optweight
+		w[ rwtips ] <- optweight
 		ff <- codls( tr, logtau = f$logtau , weights = w)
 	} else{
 		optweight <- NA 
