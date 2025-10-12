@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting • cod</title>
+<title>Neisseria gonorrheae: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting • cod</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Neisseria gonorrheae: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -33,7 +33,7 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/ngono.html">N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting</a></li>
+<li><a class="dropdown-item" href="../articles/ngono.html">Neisseria gonorrheae: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting</a></li>
   </ul>
 </li>
       </ul>
@@ -54,10 +54,10 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>N. gonorrhea: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting</h1>
+      <h1>Neisseria gonorrheae: Computing coalescent odds, identifying growing lineages, cluster identification &amp; sample reweighting</h1>
                         <h4 data-toc-skip class="author">Erik Volz</h4>
             
-            <h4 data-toc-skip class="date">2025-09-25</h4>
+            <h4 data-toc-skip class="date">2025-10-12</h4>
       
 
       <div class="d-none name"><code>ngono.Rmd</code></div>
@@ -66,22 +66,23 @@
     
     
 <p>This vignette demonstrates the main functions of <code>cod</code>
-using data from 1,102 Neiseria gonorrhoeae genomes first described in <a class="footnote-ref" tabindex="0" data-bs-toggle="popover" data-bs-content="&lt;p&gt;Grad Y.H. , Harris S.R., Kirkcaldy R.D., Green A.G.,
+using data from 1,102 Neisseria gonorrhoeae genomes first described in
+<a class="footnote-ref" tabindex="0" data-bs-toggle="popover" data-bs-content="&lt;p&gt;Grad Y.H. , Harris S.R., Kirkcaldy R.D., Green A.G.,
 Marks D.S., Bentley S.D., Trees D., Lipsitch M. 2016. Genomic
 epidemiology of gonococcal resistance to extended-spectrum
 cephalosporins, macrolides, and fluoroquinolones in the United States,
-2000-2013. J. Infect. Dis. 214:1579-1587.&lt;/p&gt;"><sup>1</sup></a>. The data
-used here were further analysed in <a class="footnote-ref" tabindex="0" data-bs-toggle="popover" data-bs-content='&lt;p&gt;Erik M Volz, Wiuf Carsten, Yonatan H Grad, Simon D W
+2000-2013. J. Infect. Dis. 214:1579-1587.&lt;/p&gt;"><sup>1</sup></a>. The
+data used here were further analysed in <a class="footnote-ref" tabindex="0" data-bs-toggle="popover" data-bs-content='&lt;p&gt;Erik M Volz, Wiuf Carsten, Yonatan H Grad, Simon D W
 Frost, Ann M Dennis, Xavier Didelot, Identification of Hidden Population
 Structure in Time-Scaled Phylogenies, Systematic Biology, Volume 69,
-Issue 5, September 2020, Pages 884–896, &lt;a href="https://doi.org/10.1093/sysbio/syaa009" class="external-link uri"&gt;https://doi.org/10.1093/sysbio/syaa009&lt;/a&gt;&lt;/p&gt;'><sup>2</sup></a> and this version of the data are available
-at <a href="https://github.com/xavierdidelot/gonophylo" class="external-link">https://github.com/xavierdidelot/gonophylo</a>.</p>
+Issue 5, September 2020, Pages 884–896, &lt;a href="https://doi.org/10.1093/sysbio/syaa009" class="external-link uri"&gt;https://doi.org/10.1093/sysbio/syaa009&lt;/a&gt;&lt;/p&gt;'><sup>2</sup></a> and the data analysed
+here is available at <a href="https://github.com/emvolz/cod/tree/main/inst/extdata" class="external-link">https://github.com/emvolz/cod/tree/main/inst/extdata</a>.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://emvolz.github.io/cod/">cod</a></span><span class="op">)</span></span>
 <span><span class="va">tr</span> <span class="op">&lt;-</span> <span class="fu">ape</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ape/man/read.tree.html" class="external-link">read.tree</a></span><span class="op">(</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">'extdata/grad2016-treedater-tr1.nwk'</span>, package<span class="op">=</span><span class="st">'cod'</span> <span class="op">)</span> <span class="op">)</span></span>
 <span><span class="va">md</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/read.table.html" class="external-link">read.csv</a></span><span class="op">(</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span> <span class="st">'extdata/grad2016-a2md.csv'</span> , package<span class="op">=</span><span class="st">'cod'</span> <span class="op">)</span> <span class="op">)</span> </span></code></pre></div>
-<p>This is a time-scaled phylogeny estimated with the
-<code>treedater</code> R package.</p>
+<p>This is a time-scaled phylogeny estimated using <code>phyml</code>,
+<code>ClonalFrameML</code> and the <code>treedater</code> R package.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tr</span> </span></code></pre></div>
 <pre><code><span><span class="co">## </span></span>
@@ -105,7 +106,7 @@ of “2” to represent resistance.</p>
 <span><span class="co">## 5 15335_2#13   2   2   0  NA   0   2   2    CHI 2008</span></span>
 <span><span class="co">## 6 15335_2#14   2   2   0  NA   0   0   2    KCY 2008</span></span></code></pre>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html" class="external-link">hist</a></span><span class="op">(</span> <span class="va">md</span><span class="op">$</span><span class="va">Year</span>, title <span class="op">=</span> <span class="st">''</span>, ylabel <span class="op">=</span> <span class="st">''</span>, xlabel <span class="op">=</span> <span class="st">'Year'</span> <span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html" class="external-link">hist</a></span><span class="op">(</span> <span class="va">md</span><span class="op">$</span><span class="va">Year</span>, main <span class="op">=</span> <span class="st">''</span>, ylab <span class="op">=</span> <span class="st">''</span>, xlab <span class="op">=</span> <span class="st">'Year'</span> <span class="op">)</span></span></code></pre></div>
 <p><img src="ngono_files/figure-html/unnamed-chunk-3-1.png" width="700"></p>
 <div class="section level2">
 <h2 id="estimating-coalescent-odds">Estimating coalescent odds<a class="anchor" aria-label="anchor" href="#estimating-coalescent-odds"></a>
@@ -142,7 +143,7 @@ squares is <code>codls</code>:</p>
 <p>The only required argument is a time-scaled phylogenetic tree. This
 method models the correlation of coalescent odds between phylogenetic
 lineages using a Gaussian-Markov Random Field which includes a precision
-parameter <code>logtau</code>. If indepently estimated, this can be
+parameter <code>logtau</code>. If independently estimated, this can be
 provided to <code>codls</code> to speed up estimation, but if omitted,
 <code>logtau</code> will be automatically estimated using the
 <code>tauprofile</code> function. You can also speed up
@@ -440,7 +441,7 @@ select the optimal threshold:</p>
 <span><span class="co">## 4 2191                    1 -0.3838401 FALSE</span></span>
 <span><span class="co">## 5 1065 17176_1#39         2 -0.4356554  TRUE</span></span>
 <span><span class="co">## 6 1066  8289_2#72         2 -0.4411569  TRUE</span></span></code></pre>
-<p>Plotting these shows that one cluster very closely matches a clade
+<p>Plotting this shows that one cluster very closely matches a clade
 with high levels of AZI resistance and high coalescent odds, so an
 alternative way to analyse these data would be to identify clusters with
 high coalescent odds and then characterise resistance patters within
