@@ -41,7 +41,7 @@ The main function to estimate coalescent odds using weighted least squares is `c
 f <- codls( tr )
 f
 ```
-The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If independently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `tauprofile` function. You can also speed up `codls` by using multiple CPUs with the `ncpu` argument. 
+The only required argument is a time-scaled phylogenetic tree. This method models the correlation of coalescent odds between phylogenetic lineages using a Gaussian-Markov Random Field which includes a precision parameter `logtau`. If independently estimated, this can be provided to `codls` to speed up estimation, but if omitted, `logtau` will be automatically estimated using the `optcodsmooth` function. You can also speed up `codls` by using multiple CPUs with the `ncpu` argument. 
 
 Plotting the fit will display a tree with estimated log odds of coalescence mapped by colour on to branches. Note that this requires the `ggtree` package to be installed. 
 ```{r, fig.width=11, fig.height=11}

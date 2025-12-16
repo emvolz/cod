@@ -159,22 +159,24 @@ TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 10
 #' }
 #' 
 #' @export 
-codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu = 1 )
+codls <- function(tr1, logtau = NULL, profcontrol = list(), weights=NULL, ncpu = 1 )
 {
-	if (!inherits( tr1, 'cppephylo' ) & inherits(tr1,'phylo'))
+	if (!inherits(tr1,'cppephylo') & inherits(tr1,'phylo'))
 	{
 		tr1 <- .maketreedata(tr1)
 	}
 	logtau = logtau[1] 
-	tpdf <- NULL 
+	otpdf <- NULL 
 	if ( is.null( logtau )){
 		tpargs <- modifyList( TPARGS, profcontrol )
 		tpargs$tr = tr1 
 		tpargs$ipw = weights
 		tpargs$ncpu = ncpu 
-		tpdf <- do.call( tauprofile, tpargs ) 
-		logtau <- tpdf$logtau[ which.min( tpdf$loss ) ] 
-		print( tpdf )
+		# tpdf <- do.call( tauprofile, tpargs ) 
+		# logtau <- tpdf$logtau[ which.min( tpdf$loss ) ] 
+		otpdf <- do.call( optcodsmooth , tpargs )
+		logtau <- otpdf$minimum
+		message( otpdf$data )
 	}
 	st1 <- Sys.time() 
 
@@ -241,8 +243,8 @@ codls <- function(tr1, logtau = NULL , profcontrol = list(), weights=NULL, ncpu 
 		, logoddsindices = (nr+1):nrow(X)
 		, istartnodeterms  = nr+1
 		, coindices = coindices # indices in X corresponding to coalescentcohorts 
-		, tauprofile = tpdf
-		, runtime = st3  - st1 
+		, optsmooth = otpdf
+		, runtime = st3 - st1 
 	   )
 	   , class = 'gpgmrf' )
 }
@@ -454,6 +456,7 @@ lbi <- function( tr, logtau )
 
 }
 
+
 #' Optimise smoothing parameter for a given tree and branch statistic 
 #' 
 #' This function maximises the deviance explained of future evolution of the given branch statistic via its dependence on a smoothing parameter (tau). 
@@ -515,6 +518,7 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, startpc = 50, endp
 	data.frame(  logtau = o$maximum, dev.expl = o$objective  )
 }
 
+
 #' Evaluate the loss function of the cod model across a range of tau (precision parameter) values
 #' 
 #' 
@@ -528,7 +532,6 @@ optsmooth <- function(tr, func, logtaulb = -4, logtauub = 35, startpc = 50, endp
 #' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
 #' @param ipw Optional inverse probability weights for each sample 
 #' @return A data frame containing the loss function evaluated over a range of tau values 
-#' @export 
 tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75, endpc = 100, nobj = 100, ipw = NULL, ncpu = 1 ) 
 {
 	stopifnot( is.numeric( ncpu ))
@@ -585,50 +588,87 @@ tauprofile <- function(tr , logtaulb = -4, logtauub = 35, res = 11, startpc = 75
 
 
 
-
-# deprecate? 
-.optimcodgmrf <- function( f , ...)
+#' Optimises the smoothing parameter using time-ordered cross-validation
+#' 
+#'  Evaluate the loss function of the cod model across a range of tau (precision parameter) values. 
+#' Local optimisation (Newton) is used to refine the fit. 
+#' 
+#' @param tr A phylogenetic tree in ape::phylo format 
+#' @param logtaulb Lower bound of precision parameteters 
+#' @param logtauub Upper bound of precision parameteters 
+#' @param res Number of tau values to evaluate 
+#' @param startpc The initial per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
+#' @param endpc The final per cent of nodes in the tree counting from root to tips where the loss function will be evaluated 
+#' @param nobj The integer number of points along the tree where the loss function will be evaluated. If Inf, will use all points between startpc and endpc, but may be slow. 
+#' @param ipw Optional inverse probability weights for each sample 
+#' @return A data frame containing the loss function evaluated over a range of tau values 
+#' @export 
+optcodsmooth <- function(tr , logtaulb = -4, logtauub = 35, res = 5, startpc = 75, endpc = 100, nobj = 100, ipw = NULL, ncpu = 1, tol = 1e-3 ) 
 {
-
-	coy = ifelse( f$y[ f$logoddsindices] > 0 , 1 , 0 )
-	ip = apply( f$X[ f$logoddsindices, ], MAR=1, FUN=function(x)which(x==1)[1] )
-
-	A <- rep(1, length(coy))
-	for (co in f$coindices){
-		a <- length( co ) 
-		A[ co-f$istart+1 ] <- a
-	}
-	# psiintercept <- -log(A-1)
-	psiintercept <- log(2) - log(A-2)
-	lbbrlen <- quantile(f$data$whnobrlens[f$data$whnobrlens>0], .01)
-	whnobrlens <- pmax( f$data$whnobrlens , lbbrlen )
-
-	ofun <- function(psi, logtau = f$logtau)
+	stopifnot( is.numeric( ncpu ))
+	stopifnot( res > 1)
+	ncpu = abs( floor( ncpu[1]  ) )
+	if (!inherits(tr, 'cppephylo' ) & inherits(tr,'phylo'))
 	{
-		arterms <- dnorm( as.vector( f$X[f$arindices,] %*% psi ), 0
-			, sd =  sqrt( whnobrlens )/exp(logtau)
-			, log=TRUE )
-
-		psi1 = psi[ ip ]
-		psi2 <- psi1 + psiintercept
-		psi2 <- pmax(-50, pmin(10, psi2 ))
-		pp <- 1 / (1 + exp(-(psi2)))
-		coodterms <-  coy*log(pp) + (1-coy)*log(1-pp)  
-		# ?implement the complete likelihood pij = pi*pj*(2-pi-pj)/((1-pi)(1-pj))
-		# above is approx correct if pi & pj << 1
-
-		ll1 = sum( arterms ) 
-		ll2 = sum( coodterms )
-		# print(c( ll2, ll1) )
-
-		-(ll1 + ll2)
+		tr <- .maketreedata(tr)
 	}
-	o = optim( par = f$coef, fn = ofun, method = 'BFGS', ...)
+	stopifnot( logtaulb < logtauub ) 
 
-	f$coef <- o$par 
-	f$optim <- o 
-	f
+	logtaus = seq( (logtaulb), (logtauub), length = res )  
+
+	gnc <- .getnodecohorts(tr, startpc, endpc, nobj)
+	icohorts <- gnc$icohorts 
+	nodeorder <- gnc$nodeorder
+
+	logtau0 <- (logtaulb + logtauub)/2
+	f = codls(tr, logtau0 ) # 
+
+	nodew <- .computenodew( tr, ipw )
+
+	lossfun <- function(logtau)
+	{
+		losses <-  parallel::mclapply( icohorts,  function(i){
+			tryCatch( {
+				keepinds <- c( 1:tr$nr, do.call(c, f$coindices[nodeorder[1:i]] )  )
+				X1 = f$X[ keepinds, ]
+				arw =  exp(logtau)^2/tr$whnobrlens 
+				w <- c( arw, nodew )
+				W1 <- Matrix::Diagonal( x = w )[keepinds, keepinds ] 
+				y1 = f$y[ keepinds ] # f used here 
+				QQ1 <- Matrix::t(X1) %*% W1 %*% X1 
+				b1 <- Matrix::t(X1) %*% W1 %*% y1 
+				beta1 =  Matrix::solve( QQ1, b1 ) |> as.vector()
+				sum( (f$y[f$coindices[[nodeorder[i+1]]]] - f$X[f$coindices[[nodeorder[i+1]]],] %*% beta1)^2 )
+			}, error = function(e) {
+				# message(e);  
+				Inf 
+			})
+		}, mc.cores = ncpu ) |> unlist() 
+		mean(losses)
+	}
+
+	# loss <- parallel::mclapply( logtaus, lossfun, mc.cores = ncpu ) |> unlist() 
+	loss <- sapply( logtaus, lossfun) 
+	
+	odf <- data.frame( logtau = logtaus, loss = loss )
+	odf$optimal <- ''
+	imin <- which.min( odf$loss )
+	odf$optimal[imin] <- '***' 
+	message( odf  )
+	ilb <- max(1, imin - 1  )
+	iub <- min(res, imin + 1  )
+	o = optimise( lossfun, lower = logtaus[ilb], upper = logtaus[iub], maximum = FALSE, tol = tol )
+
+	if ( (o$minimum < (logtaulb+ 2*tol)) | (o$minimum > (logtauub - 2*tol) ))
+		warning('Optimal smoothing parameter is close to boundary conditions. Relax logtaulb or logtauub.')
+
+	o$data = odf 
+	o$gnc = gnc 
+	o$lossfun = lossfun 
+	o
 }
+
+
 
 #' Fit a genealogical placement GMRF model using maximum likelihood 
 #' 
