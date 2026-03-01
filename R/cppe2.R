@@ -123,7 +123,47 @@
 }
 
 
-# Default arguments for tauprofile 
+# Build M x p covariate matrix at all nodes (tips + internal) for use in codls2.
+# When node_col is NULL: match tips via tip_col and impute internals via ape::ace.
+# When node_col is provided: df has one row per node indexed 1..M; used directly.
+# The intercept is always suppressed: each coalescent row of X already sums to 1
+# across all psi columns, so an intercept in Z would be a perfect linear combination
+# of existing columns, making QQ singular.
+.buildZfull <- function( tr1, covariates, formula, tip_col = 'tip.label',
+	node_col = NULL, ace_method = 'pic' )
+{
+	n     <- tr1$n
+	nnode <- tr1$nnode
+	M     <- n + nnode
+
+	# Force no intercept: an intercept in Z is aliased with the global mean of psi
+	formula_noint <- update( formula, ~ . - 1 )
+
+	if ( !is.null( node_col ) ) {
+		node_match <- match( 1:M, covariates[[ node_col ]] )
+		covs_all   <- covariates[ node_match, , drop = FALSE ]
+		Z_full     <- model.matrix( formula_noint, data = covs_all )
+	} else {
+		tip_match  <- match( tr1$tip.label, covariates[[ tip_col ]] )
+		covs_tips  <- covariates[ tip_match, , drop = FALSE ]
+		Z_tips     <- model.matrix( formula_noint, data = covs_tips )
+		p          <- ncol( Z_tips )
+		Z_internal <- matrix( NA_real_, nrow = nnode, ncol = p )
+		for ( j in seq_len( p ) ) {
+			x_j <- as.numeric( Z_tips[, j] )
+			names( x_j ) <- tr1$tip.label  # required for ape::ace name matching
+			Z_internal[, j] <- ape::ace( x_j, tr1
+				, type   = 'continuous'
+				, method = ace_method )$ace
+		}
+		colnames( Z_internal ) <- colnames( Z_tips )
+		Z_full <- rbind( Z_tips, Z_internal )
+	}
+	Z_full
+}
+
+
+# Default arguments for tauprofile
 TPARGS <- list( logtaulb = -4, logtauub = 37, res = 11, startpc = 50, endpc = 100, nobj = 100 )
 
 #' Fit a COD GMRF model using weighted least squares 
@@ -249,9 +289,193 @@ codls <- function(tr1, logtau = NULL, profcontrol = list(), weights=NULL, ncpu =
 	   , class = 'gpgmrf' )
 }
 
-#' Root mean square coalescent log odds 
+#' Fit a COD GMRF model with tip-level covariates using weighted least squares
 #'
-#' This is a summary statistic that describes the amount of variation in coalescent rates across lineages in a phylogenetic tree  
+#' Extends \code{codls} by incorporating tip-level covariates propagated to
+#' internal nodes via ancestral character estimation (ACE). The model jointly
+#' estimates node-specific coalescent log-odds psi and covariate coefficients
+#' beta. The returned \code{coef} field contains total coalescent log-odds
+#' (psi + Z beta), which is the appropriate input for downstream methods such
+#' as \code{plot}, \code{computeclusters}, and \code{neffextant}. The partial
+#' psi (without covariate contribution) is stored in \code{psi_partial}.
+#'
+#' @param tr1 Phylogenetic tree in ape::phylo format
+#' @param covariates Data frame with tip labels and covariate columns. When
+#'   \code{node_col} is NULL (default), must contain a column named
+#'   \code{tip_col} with all tip labels in the tree. When \code{node_col}
+#'   is provided, must contain a column of integer node indices 1 through
+#'   M = n_tips + n_internal covering every node.
+#' @param formula Formula with empty left-hand side (e.g. \code{~ age + sex}).
+#'   The right-hand side is passed to \code{model.matrix} to generate Z.
+#'   The intercept is always suppressed automatically: an intercept in Z would
+#'   be perfectly aliased with the global mean of psi, making the system singular.
+#' @param logtau Precision parameter. If NULL, \code{optcodsmooth} is called
+#'   (covariates are ignored during tau selection).
+#' @param profcontrol Optional list of arguments passed to \code{optcodsmooth}
+#' @param weights An optional named or unnamed vector of sample weights for each tip
+#' @param ncpu Integer number of CPUs for parallel tau optimisation
+#' @param tip_col Name of the column in \code{covariates} matching
+#'   \code{tr1$tip.label}. Ignored when \code{node_col} is provided.
+#' @param node_col Optional name of a column in \code{covariates} containing
+#'   integer node indices (1 through M). When provided, covariate values are
+#'   used directly for all nodes and ACE is skipped.
+#' @param ace_method Method passed to \code{ape::ace} for ancestral state
+#'   estimation. Default \code{'pic'} (fast). Only used when \code{node_col}
+#'   is NULL.
+#' @return A gpgmrf object with additional fields: \code{psi_partial},
+#'   \code{beta} (named p-vector), \code{beta_names}, \code{Z_full} (M x p).
+#'
+#' @export
+codls2 <- function( tr1, covariates, formula, logtau = NULL, profcontrol = list()
+	, weights = NULL, ncpu = 1, tip_col = 'tip.label'
+	, node_col = NULL, ace_method = 'pic' )
+{
+	if ( !inherits( tr1, 'cppephylo' ) & inherits( tr1, 'phylo' ) )
+		tr1 <- .maketreedata( tr1 )
+
+	M <- tr1$n + tr1$nnode
+
+	# validate input 
+	stopifnot( is.data.frame( covariates ) )
+	stopifnot( inherits( formula, 'formula' ) )
+	if ( length( formula ) != 2 )
+		stop( 'formula must have an empty left-hand side, e.g. ~ x1 + x2' )
+	if ( is.null( node_col ) ) {
+		if ( !( tip_col %in% colnames( covariates ) ) )
+			stop( glue::glue( "covariates must contain a column named '{tip_col}'" ) )
+		if ( !all( tr1$tip.label %in% covariates[[ tip_col ]] ) )
+			stop( 'Not all tip labels in tr1 are present in covariates[[ tip_col ]]' )
+	} else {
+		if ( !( node_col %in% colnames( covariates ) ) )
+			stop( glue::glue( "covariates must contain a column named '{node_col}'" ) )
+		if ( !all( 1:M %in% covariates[[ node_col ]] ) )
+			stop( 'When node_col is provided, covariates must contain rows for every node index 1..M' )
+	}
+
+	# opt tau of needed 
+	logtau <- logtau[1]
+	otpdf  <- NULL
+	if ( is.null( logtau ) ) {
+		tpargs      <- modifyList( TPARGS, profcontrol )
+		tpargs$tr   <- tr1
+		tpargs$ipw  <- weights
+		tpargs$ncpu <- ncpu
+		otpdf  <- do.call( optcodsmooth, tpargs )
+		logtau <- otpdf$minimum
+		message( otpdf$data )
+	}
+
+	st1 <- Sys.time()
+
+	# build covariate model matrix 
+	Z_full     <- .buildZfull( tr1, covariates, formula
+		, tip_col    = tip_col
+		, node_col   = node_col
+		, ace_method = ace_method )
+	p          <- ncol( Z_full )
+	beta_names <- colnames( Z_full )
+	if ( p < 1 )
+		stop( 'formula produced zero covariate columns' )
+
+	# (same as codls1 -- design matrix )
+	whno <- tr1$whno
+	nr   <- tr1$nr
+
+	ary <- rep( 0, nr )
+	y   <- c( ary, tr1$nodey )
+
+	arw   <- exp( logtau )^2 / tr1$whnobrlens
+	nodew <- .computenodew( tr1, weights )
+	w     <- c( arw, nodew )
+
+	# indices for X
+	## AR component 
+	ai <- 1:nr
+	aj <- whno
+	ax <- rep( 1, nr )
+	ai <- c( ai, 1:nr )
+	aj <- c( aj, tr1$parent[ whno ] )
+	ax <- c( ax, rep( -1, nr ) )
+
+	k         <- nr + 1
+	coindices <- list()
+	coii      <- 1
+	for ( co in tr1$coalescentcohorts ) {
+		coindices[[ coii ]] <- k:( k + length( co ) - 1 )
+		coii <- coii + 1
+		k    <- k + length( co )
+	}
+
+	ncoi <- sum( sapply( tr1$coalescentcohorts, length ) )
+	coi  <- ( nr + 1 ):( nr + ncoi )
+	coj  <- do.call( c, tr1$coalescentcohorts )
+	cox  <- rep( 1, ncoi )
+	ai   <- c( ai, coi )
+	aj   <- c( aj, coj )
+	ax   <- c( ax, cox )
+
+	X <- Matrix::sparseMatrix( i = ai, j = aj, x = ax )
+
+	# combine design and covars, solve regression
+	# AR rows (1:nr) get Z = 0 (regularisation applies to psi only).
+	# Coalescent row k (index coi[k]) has covariate Z_full[ coj[k], ].
+	Z_coi_vals <- Z_full[ coj, , drop = FALSE ]   # ncoi x p
+	ze_row     <- rep( coi, times = p )
+	ze_col     <- rep( 1:p, each = ncoi )
+	ze_x       <- as.vector( Z_coi_vals )          # column-major flattening
+	Z_extended <- Matrix::sparseMatrix( i = ze_row, j = ze_col, x = ze_x
+		, dims = c( nrow( X ), p ) )
+
+	Xprime <- Matrix::cbind2( X, Z_extended )      # (nr+ncoi) x (M+p)
+
+	W  <- Matrix::Diagonal( x = w )
+	QQ <- Matrix::t( Xprime ) %*% W %*% Xprime
+	b  <- Matrix::t( Xprime ) %*% W %*% y
+	theta <- tryCatch(
+		Matrix::solve( QQ, b ) |> as.vector()
+		, error = function(e) rep( NA_real_, ncol( Xprime ) )
+	)
+
+	# NOTE returned coef is the total cods, not the direct regression estimate 
+	psi  <- theta[ 1:M ]
+	beta <- theta[ ( M + 1 ):( M + p ) ]
+	names( beta ) <- beta_names
+
+	total_cod   <- psi + as.vector( Z_full %*% beta )
+	coef_out    <- total_cod - mean( total_cod )   # total COD, centred
+	psi_partial <- psi - mean( psi )               # GMRF component, centred
+
+	st3 <- Sys.time()
+
+	# -- 8. Return gpgmrf object ----------------------------------------------
+	structure( list(
+		coef              = coef_out
+		, psi_partial     = psi_partial
+		, beta            = beta
+		, beta_names      = beta_names
+		, Z_full          = Z_full
+		, logtau          = logtau
+		, data            = tr1
+		, X               = Xprime
+		, W               = W
+		, b               = b
+		, Q               = QQ
+		, y               = y
+		, nr              = nr
+		, arindices       = 1:nr
+		, logoddsindices  = ( nr + 1 ):nrow( Xprime )
+		, istartnodeterms = nr + 1
+		, coindices       = coindices
+		, optsmooth       = otpdf
+		, runtime         = st3 - st1
+	)
+	, class = 'gpgmrf' )
+}
+
+
+#' Root mean square coalescent log odds
+#'
+#' This is a summary statistic that describes the amount of variation in coalescent rates across lineages in a phylogenetic tree
 #' It is defined as \deqn{ \sqrt{ \sum_i l_i \psi_i^2 / L }  }
 #' where the sum is over all branches i in the tree and weighted by branch length \eqn{l_i} and where  \eqn{ L = \sum_i l_i  }
 #'
@@ -279,32 +503,45 @@ neffextant <- function(f)
 	1 / sum(p^2)
 }
 
-#' @export 
+#' @export
 summary.gpgmrf <- function(f)
 {
 	print(f)
 	cat('\n' )
 	odf <- data.frame( logprecision = f$logtau
-		 , RMSCLO = rmsclo(f) 
-		 , Neff = neffextant(f) 
+		 , RMSCLO = rmsclo(f)
+		 , Neff = neffextant(f)
 		)
 	print( odf )
+	if ( !is.null( f$beta ) ) {
+		cat( '\n' )
+		bdf <- data.frame( term = f$beta_names, estimate = f$beta )
+		cat( 'Covariate coefficients:\n' )
+		print( bdf, row.names = FALSE )
+		odf$beta <- list( bdf )
+	}
 	cat('\n' )
 	invisible(odf)
 }
 
-#' @export 
+#' @export
 print.gpgmrf <- function(f)
 {
 	stopifnot( inherits( f, 'gpgmrf' ))
 	cat(' Genealogical placement GMRF model fit \n')
-	print( f$data ) 
+	print( f$data )
 	cat('Range of coefficients: \n')
 	cat( glue::glue('{range(coef(f))}') )
 	cat( '\n' )
 	cat(glue::glue( 'Precision parameter (log tau): {f$logtau} \n') )
+	if ( !is.null( f$beta ) ) {
+		cat( '\n' )
+		cat( 'Covariate coefficients (beta):\n' )
+		bdf <- data.frame( term = f$beta_names, estimate = f$beta )
+		print( bdf, row.names = FALSE )
+	}
 	cat('\n')
-	invisible(f) 
+	invisible(f)
 }
 
 #' @export 
